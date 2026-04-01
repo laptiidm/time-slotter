@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>@ViewData["Title"] - TimeSlotter</title>
+    @* Login only: Tailwind here so this page never loads the main navbar/footer layout. *@
+    <script src="https://cdn.tailwindcss.com"></script>
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body class="h-screen overflow-hidden bg-slate-950 antialiased">
+    @* Full viewport height; no chrome — card centers within the screen. *@
+    <div class="flex h-full min-h-0 items-center justify-center px-4 py-8 sm:px-6">
+        @RenderBody()
+    </div>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

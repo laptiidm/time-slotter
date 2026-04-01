@@ -1,0 +1,64 @@
+@page
+@model TimeSlotter.Pages.UserModel
+@{
+    ViewData["Title"] = "User";
+}
+
+@section Head {
+    <script src="https://cdn.tailwindcss.com"></script>
+}
+
+@*
+  Content height = viewport minus fixed navbar (h-14 / 3.5rem).
+  No page-level scroll; only the right column list area scrolls when content exists.
+*@
+<div class="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
+    <header class="shrink-0 pb-4">
+        <h1 class="text-2xl font-semibold tracking-tight text-white">Book a slot</h1>
+        <p class="mt-1 text-sm text-slate-400">Pick a date, then choose an available time.</p>
+    </header>
+
+    <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
+        @* Left: static calendar shell (data wiring comes later). *@
+        <aside class="flex min-h-0 flex-col lg:h-full">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
+                <div class="min-h-0 flex-1 overflow-y-auto p-6">
+                    <section aria-label="Calendar preview">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h2 class="text-sm font-medium text-slate-300">April 2026</h2>
+                            <div class="flex gap-1">
+                                <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&lsaquo;</span>
+                                <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&rsaquo;</span>
+                            </div>
+                        </div>
+                        <div class="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                            @for (var i = 0; i < 28; i++)
+                            {
+                                var day = i + 1;
+                                var isToday = day == 2;
+                                <div class="@(isToday ? "border-blue-500 bg-blue-600/20 text-blue-200" : "border-slate-700/80 text-slate-300") flex aspect-square items-center justify-center rounded-lg border text-xs font-medium">
+                                    @day
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </aside>
+
+        @* Right: reserved for slot list — empty for now, scroll ready. *@
+        <section class="flex min-h-0 flex-col lg:h-full" aria-label="Available slots">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5">
+                <div class="mb-4 flex shrink-0 items-center justify-between">
+                    <h2 class="text-sm font-medium text-slate-300">Available times</h2>
+                </div>
+                <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
+                    @* Intentionally empty — populate from API / model later. *@
+                </div>
+            </div>
+        </section>
+    </div>
+</div>

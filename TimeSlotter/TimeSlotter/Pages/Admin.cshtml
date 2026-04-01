@@ -1,0 +1,117 @@
+@page
+@model TimeSlotter.Pages.AdminModel
+@{
+    ViewData["Title"] = "Admin";
+}
+
+@section Head {
+    <script src="https://cdn.tailwindcss.com"></script>
+}
+
+@*
+  h-[calc(100vh-3.5rem)] matches navbar row height (Tailwind h-14).
+  flex + min-h-0 lets the right column scroll internally without scrolling the document.
+*@
+<div class="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
+    <header class="shrink-0 pb-4">
+        <h1 class="text-2xl font-semibold tracking-tight text-white">Admin</h1>
+        <p class="mt-1 text-sm text-slate-400">Manage time slots and availability.</p>
+    </header>
+
+    <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
+        @* Left: calendar + generator *@
+        <aside class="flex min-h-0 flex-col lg:h-full">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
+                <div class="min-h-0 flex-1 overflow-y-auto p-6">
+                    <section aria-label="Calendar preview">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h2 class="text-sm font-medium text-slate-300">April 2026</h2>
+                            <div class="flex gap-1">
+                                <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&lsaquo;</span>
+                                <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&rsaquo;</span>
+                            </div>
+                        </div>
+                        <div class="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                            @for (var i = 0; i < 28; i++)
+                            {
+                                var day = i + 1;
+                                var isToday = day == 2;
+                                <div class="@(isToday ? "border-blue-500 bg-blue-600/20 text-blue-200" : "border-slate-700/80 text-slate-300") flex aspect-square items-center justify-center rounded-lg border text-xs font-medium">
+                                    @day
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    <hr class="my-6 border-slate-700/60"/>
+
+                    <section aria-label="Slot generator">
+                        <h2 class="mb-3 text-sm font-medium text-slate-300">Slot generator</h2>
+                        <label for="slotCountInput" class="mb-1 block text-xs text-slate-500">Number of slots (max 96)</label>
+                        <input id="slotCountInput"
+                               type="number"
+                               min="0"
+                               max="96"
+                               value="0"
+                               class="mb-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-blue-500/40 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+                        <button id="generateSlotsBtn"
+                                type="button"
+                                class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+                            Generate
+                        </button>
+                    </section>
+                </div>
+            </div>
+        </aside>
+
+        @* Right: starts empty; filled by script on Generate (capped at 96). *@
+        <section class="flex min-h-0 flex-col lg:h-full" aria-label="Generated slots">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5">
+                <div class="mb-4 flex shrink-0 items-center justify-between">
+                    <h2 class="text-sm font-medium text-slate-300">Time slots</h2>
+                    <span id="slotsCountBadge" class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-400">0 slots</span>
+                </div>
+                <div id="slotsContainer" class="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1"></div>
+            </div>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const input = document.getElementById('slotCountInput');
+            const btn = document.getElementById('generateSlotsBtn');
+            const container = document.getElementById('slotsContainer');
+            const badge = document.getElementById('slotsCountBadge');
+            const maxSlots = 96;
+
+            function setBadge(count) {
+                if (!badge) return;
+                badge.textContent = count === 1 ? '1 slot' : count + ' slots';
+            }
+
+            btn?.addEventListener('click', function () {
+                let n = parseInt(input?.value ?? '0', 10);
+                if (Number.isNaN(n) || n < 0) n = 0;
+                if (n > maxSlots) n = maxSlots;
+                if (input) input.value = String(n);
+
+                if (!container) return;
+                container.innerHTML = '';
+                for (let i = 1; i <= n; i++) {
+                    const article = document.createElement('article');
+                    article.className = 'flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/50 px-4 py-3 ring-1 ring-white/5';
+                    article.innerHTML =
+                        '<span class="font-mono text-sm text-slate-500">Slot #' + i + '</span>' +
+                        '<span class="shrink-0 rounded-full border border-slate-600 px-2.5 py-0.5 text-xs font-medium text-slate-400">Empty</span>';
+                    container.appendChild(article);
+                }
+                setBadge(n);
+            });
+        })();
+    </script>
+}
