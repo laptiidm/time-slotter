@@ -48,6 +48,17 @@
 
                     <hr class="my-6 border-slate-700/60"/>
 
+                    <section aria-label="Share Link">
+                        <h2 class="mb-3 text-sm font-medium text-slate-300">Share Link</h2>
+                        <label for="shareDateInput" class="mb-1 block text-xs text-slate-500">Date</label>
+                        <input id="shareDateInput" type="date" class="mb-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-blue-500/40 focus:border-blue-500 focus:ring-2 focus:ring-blue-500" />
+                        <button id="copyLinkBtn" type="button" class="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-slate-900" data-base-url="/u/@Model.Provider.Slug">
+                            Copy Link
+                        </button>
+                    </section>
+
+                    <hr class="my-6 border-slate-700/60"/>
+
                     <section aria-label="Slot generator">
                         <h2 class="mb-3 text-sm font-medium text-slate-300">Slot generator</h2>
                         <label for="slotCountInput" class="mb-1 block text-xs text-slate-500">Number of slots (max 96)</label>
@@ -111,6 +122,26 @@
                     container.appendChild(article);
                 }
                 setBadge(n);
+            });
+
+            const copyLinkBtn = document.getElementById('copyLinkBtn');
+            const shareDateInput = document.getElementById('shareDateInput');
+
+            copyLinkBtn?.addEventListener('click', function () {
+                const basePath = copyLinkBtn.getAttribute('data-base-url');
+                if (!basePath) {
+                    return;
+                }
+
+                let url = window.location.origin + basePath;
+                if (shareDateInput && shareDateInput.value) {
+                    url += '?date=' + shareDateInput.value;
+                }
+                navigator.clipboard.writeText(url).then(function() {
+                    const originalText = copyLinkBtn.textContent;
+                    copyLinkBtn.textContent = 'Copied!';
+                    setTimeout(() => copyLinkBtn.textContent = originalText, 2000);
+                });
             });
         })();
     </script>

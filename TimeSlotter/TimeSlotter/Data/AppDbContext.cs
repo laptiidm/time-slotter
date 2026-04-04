@@ -22,9 +22,14 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
         // Single-table strategy: Identity user store uses the Providers table name.
         modelBuilder.Entity<Provider>().ToTable("Providers");
 
-        modelBuilder.Entity<Slot>()
-            .Property(s => s.Status)
-            .HasConversion<int>();
+        modelBuilder.Entity<Slot>(slot =>
+        {
+            slot.Property(s => s.ResourceContext)
+                .IsRequired(false);
+
+            slot.Property(s => s.Status)
+                .HasConversion<int>();
+        });
 
         modelBuilder.Entity<Provider>()
             .HasIndex(p => p.Slug)

@@ -1,4 +1,4 @@
-@page
+@page "/u/{slug}"
 @model TimeSlotter.Pages.UserModel
 @{
     ViewData["Title"] = "User";
@@ -56,7 +56,28 @@
                     <h2 class="text-sm font-medium text-slate-300">Available times</h2>
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
-                    @* Intentionally empty — populate from API / model later. *@
+                    @if (Model.AvailableSlots.Any())
+                    {
+                        <div class="space-y-3">
+                            @foreach (var slot in Model.AvailableSlots)
+                            {
+                                <article class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/50 px-4 py-3 ring-1 ring-white/5">
+                                    <span class="font-mono text-sm text-slate-500">
+                                        @slot.StartTime.ToString("HH:mm")
+                                        @if (!string.IsNullOrEmpty(slot.ResourceContext))
+                                        {
+                                            <text> - @slot.ResourceContext</text>
+                                        }
+                                    </span>
+                                    <button class="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500">Book</button>
+                                </article>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-sm text-slate-500">No slots available for this date.</p>
+                    }
                 </div>
             </div>
         </section>

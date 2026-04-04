@@ -3,6 +3,28 @@
 @{
     Layout = "_LayoutLogin";
     ViewData["Title"] = "Register";
+    var hasPosted = string.Equals(ViewContext.HttpContext.Request.Method, "POST", StringComparison.OrdinalIgnoreCase);
+    var emailBorderClass = hasPosted
+        && ViewData.ModelState.TryGetValue("Input.Email", out var emailState)
+        && emailState.Errors.Count > 0
+            ? "border-red-500"
+            : "border-gray-700";
+    var passwordBorderClass = hasPosted
+        && ViewData.ModelState.TryGetValue("Input.Password", out var passwordState)
+        && passwordState.Errors.Count > 0
+            ? "border-red-500"
+            : "border-gray-700";
+    var fullNameBorderClass = hasPosted
+        && ViewData.ModelState.TryGetValue("Input.FullName", out var fullNameState)
+        && fullNameState.Errors.Count > 0
+            ? "border-red-500"
+            : "border-gray-700";
+    var nicknameBorderClass = hasPosted
+        && ViewData.ModelState.TryGetValue("Input.Nickname", out var nicknameState)
+        && nicknameState.Errors.Count > 0
+            ? "border-red-500"
+            : "border-gray-700";
+    var inputBaseClasses = "w-full rounded-lg border bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500";
 }
 
 <div class="w-full max-w-md">
@@ -13,8 +35,12 @@
         </header>
 
         <form method="post" asp-page="/Register" class="space-y-5">
-            <div asp-validation-summary="All"
-                 class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"></div>
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                    <div asp-validation-summary="All"></div>
+                </div>
+            }
 
             <div>
                 <label asp-for="Input.Email" class="mb-1.5 block text-sm font-medium text-slate-300">Email</label>
@@ -23,7 +49,7 @@
                        autocomplete="email"
                        required
                        placeholder="you@example.com"
-                       class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+                       class="@($"{inputBaseClasses} {emailBorderClass}")"/>
             </div>
 
             <div>
@@ -32,7 +58,7 @@
                        type="password"
                        required
                        placeholder="Minimum 6 characters"
-                       class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+                       class="@($"{inputBaseClasses} {passwordBorderClass}")"/>
             </div>
 
             <div>
@@ -42,7 +68,7 @@
                        type="text"
                        required
                        placeholder="Jane Doe"
-                       class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+                       class="@($"{inputBaseClasses} {fullNameBorderClass}")"/>
             </div>
 
             <div>
@@ -54,7 +80,7 @@
                            type="text"
                            required
                            placeholder="your-nickname"
-                           class="w-full rounded-lg border border-slate-700 bg-slate-950 pl-8 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+                           class="@($"w-full rounded-lg border bg-slate-950 pl-8 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500 {nicknameBorderClass}")"/>
                 </div>
                 <p class="mt-2 text-xs text-slate-500">
                     Your public link:
@@ -80,7 +106,7 @@
 
         <p class="mt-5 text-center text-sm text-slate-400">
             Already have an account?
-            <a asp-page="/Login" class="font-medium text-blue-400 hover:underline">Login</a>
+            <a asp-page="/Index" class="font-medium text-blue-400 hover:underline">Login</a>
         </p>
     </div>
 </div>
