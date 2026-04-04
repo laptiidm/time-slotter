@@ -17,12 +17,15 @@
         </header>
 
         <form method="post" asp-page="/Login" class="space-y-5">
+            <div asp-validation-summary="All"
+                 class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            </div>
+
             <div>
-                <label for="emailOrUsername" class="mb-1.5 block text-sm font-medium text-slate-300">
+                <label asp-for="Input.EmailOrUsername" class="mb-1.5 block text-sm font-medium text-slate-300">
                     Email or username
                 </label>
-                <input id="emailOrUsername"
-                       name="EmailOrUsername"
+                <input asp-for="Input.EmailOrUsername"
                        type="text"
                        autocomplete="username"
                        required
@@ -31,11 +34,10 @@
             </div>
 
             <div>
-                <label for="password" class="mb-1.5 block text-sm font-medium text-slate-300">
+                <label asp-for="Input.Password" class="mb-1.5 block text-sm font-medium text-slate-300">
                     Password
                 </label>
-                <input id="password"
-                       name="Password"
+                <input asp-for="Input.Password"
                        type="password"
                        autocomplete="current-password"
                        required
@@ -48,5 +50,10 @@
                 Login
             </button>
         </form>
+
+        <p class="mt-4 text-center text-sm text-slate-400">
+            Don't have an account?
+            <a asp-page="/Register" class="font-medium text-blue-400 hover:underline">Register</a>
+        </p>
     </div>
 </div>

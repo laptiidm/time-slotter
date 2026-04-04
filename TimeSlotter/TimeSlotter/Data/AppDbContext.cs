@@ -1,21 +1,27 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TimeSlotter.Models;
 
 namespace TimeSlotter.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
     }
 
-    public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<Slot> Slots => Set<Slot>();
     public DbSet<Booking> Bookings => Set<Booking>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
+        // Single-table strategy: Identity user store uses the Providers table name.
+        modelBuilder.Entity<Provider>().ToTable("Providers");
+
         modelBuilder.Entity<Slot>()
             .Property(s => s.Status)
             .HasConversion<int>();

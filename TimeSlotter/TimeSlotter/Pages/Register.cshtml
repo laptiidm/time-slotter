@@ -1,0 +1,114 @@
+@page
+@model TimeSlotter.Pages.RegisterModel
+@{
+    Layout = "_LayoutLogin";
+    ViewData["Title"] = "Register";
+}
+
+<div class="w-full max-w-md">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl shadow-black/30 ring-1 ring-white/5">
+        <header class="mb-8 text-center">
+            <h1 class="text-xl font-semibold tracking-tight text-white">Create account</h1>
+            <p class="mt-1 text-sm text-slate-400">Join to manage and book time slots.</p>
+        </header>
+
+        <form method="post" asp-page="/Register" class="space-y-5">
+            <div asp-validation-summary="All"
+                 class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"></div>
+
+            <div>
+                <label asp-for="Input.Email" class="mb-1.5 block text-sm font-medium text-slate-300">Email</label>
+                <input asp-for="Input.Email"
+                       type="email"
+                       autocomplete="email"
+                       required
+                       placeholder="you@example.com"
+                       class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+            </div>
+
+            <div>
+                <label asp-for="Input.Password" class="mb-1.5 block text-sm font-medium text-slate-300">Password</label>
+                <input asp-for="Input.Password"
+                       type="password"
+                       required
+                       placeholder="Minimum 6 characters"
+                       class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+            </div>
+
+            <div>
+                <label asp-for="Input.FullName" class="mb-1.5 block text-sm font-medium text-slate-300">Full name</label>
+                <input asp-for="Input.FullName"
+                       id="fullNameInput"
+                       type="text"
+                       required
+                       placeholder="Jane Doe"
+                       class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+            </div>
+
+            <div>
+                <label asp-for="Input.Nickname" class="mb-1.5 block text-sm font-medium text-slate-300">Nickname</label>
+                <div class="relative">
+                    <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">@@</span>
+                    <input asp-for="Input.Nickname"
+                           id="nicknameInput"
+                           type="text"
+                           required
+                           placeholder="your-nickname"
+                           class="w-full rounded-lg border border-slate-700 bg-slate-950 pl-8 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">
+                    Your public link:
+                    <span class="text-slate-300">timeslotter.com/u/<span id="publicLinkSlug">your-nickname</span></span>
+                </p>
+            </div>
+
+            <div>
+                <label asp-for="Input.Description" class="mb-1.5 block text-sm font-medium text-slate-300">
+                    Description <span class="text-slate-500">(optional)</span>
+                </label>
+                <textarea asp-for="Input.Description"
+                          rows="4"
+                          placeholder="Short bio (shown on your public page)"
+                          class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500"></textarea>
+            </div>
+
+            <button type="submit"
+                    class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+                Register
+            </button>
+        </form>
+
+        <p class="mt-5 text-center text-sm text-slate-400">
+            Already have an account?
+            <a asp-page="/Login" class="font-medium text-blue-400 hover:underline">Login</a>
+        </p>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const fullName = document.getElementById('fullNameInput');
+            const nickname = document.getElementById('nicknameInput');
+            const slugEl = document.getElementById('publicLinkSlug');
+
+            function slugify(value) {
+                value = (value || '').trim().toLowerCase();
+                if (value.length === 0) return '';
+                // Replace runs of non-alphanumeric chars with hyphens.
+                return value.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            }
+
+            function sync() {
+                if (!fullName || !nickname) return;
+                const slug = slugify(fullName.value);
+                nickname.value = slug;
+                if (slugEl) slugEl.textContent = slug || 'your-nickname';
+            }
+
+            fullName?.addEventListener('input', sync);
+            sync();
+        })();
+    </script>
+}
+

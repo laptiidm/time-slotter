@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using TimeSlotter.Models;
 using TimeSlotter.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +10,34 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+var identityBuilder = builder.Services.AddIdentityCore<Provider>(options =>
+{
+    // UX for students / demo: allow short passwords but still require 6+ length.
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 6;
+});
+
+identityBuilder.AddRoles<IdentityRole<int>>();
+identityBuilder.AddSignInManager();
+identityBuilder.AddEntityFrameworkStores<AppDbContext>();
+
+// Cookie auth: default scheme must be Identity's application cookie scheme.
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultScheme = IdentityConstants.ApplicationScheme;
+        options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
+        options.DefaultChallengeScheme = IdentityConstants.ApplicationScheme;
+        options.DefaultSignInScheme = IdentityConstants.ApplicationScheme;
+    })
+    .AddIdentityCookies();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Login";
+    options.AccessDeniedPath = "/Login";
+});
 
 var app = builder.Build();
 
@@ -24,6 +54,8 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+// Required order for Razor Pages + Identity: routing → authenticate → authorize → endpoints.
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();

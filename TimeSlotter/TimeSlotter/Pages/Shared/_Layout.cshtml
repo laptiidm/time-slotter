@@ -33,12 +33,29 @@
                     <li class="nav-item">
                         <a class="nav-link text-dark" asp-page="/User">User</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-dark" asp-page="/Admin">Admin Panel</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-dark" asp-page="/Login">Login</a>
-                    </li>
+
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-page="/Admin">Admin</a>
+                        </li>
+                        <li class="nav-item">
+                            <form asp-page="/Logout" method="post" class="m-0">
+                                <button type="submit" class="nav-link btn btn-link text-dark p-0">
+                                    Logout
+                                </button>
+                            </form>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-page="/Login">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-page="/Register">Register</a>
+                        </li>
+                    }
                 </ul>
             </div>
         </div>
