@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model IndexModel
 @{
     Layout = "_LayoutLogin";
@@ -10,13 +10,13 @@
     var passwordHasError = hasPosted
         && ViewData.ModelState.TryGetValue(nameof(Model.Password), out var passwordState)
         && passwordState.Errors.Count > 0;
-    var defaultInputClasses = "w-full rounded-lg border bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition";
+    var defaultInputClasses = "block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm placeholder:text-slate-500 sm:leading-6";
     var emailClasses = emailHasError
-        ? $"{defaultInputClasses} border-red-500 ring-1 ring-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-        : $"{defaultInputClasses} border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500";
+        ? $"{defaultInputClasses} ring-1 ring-inset ring-red-500 focus:ring-2 focus:ring-inset focus:ring-red-500"
+        : $"{defaultInputClasses} ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500";
     var passwordClasses = passwordHasError
-        ? $"{defaultInputClasses} border-red-500 ring-1 ring-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-        : $"{defaultInputClasses} border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500";
+        ? $"{defaultInputClasses} ring-1 ring-inset ring-red-500 focus:ring-2 focus:ring-inset focus:ring-red-500"
+        : $"{defaultInputClasses} ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500";
 }
 
 <div class="w-full max-w-md">
@@ -68,7 +68,7 @@
             </label>
 
             <button type="submit"
-                    class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+                    class="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 Login
             </button>
         </form>

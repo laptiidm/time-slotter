@@ -1,12 +1,16 @@
 namespace TimeSlotter.Models;
 
 /// <summary>
-/// Lifecycle of a time slot for booking workflows.
+/// Stored as int on <see cref="Slot"/>. Values 0, 2, 3 align with the previous Free / Booked / Blocked set.
 /// </summary>
 public enum SlotStatus
 {
-    Free = 0,
-    Pending = 1,
-    Booked = 2,
-    Blocked = 3
+    /// <summary>Open for client booking.</summary>
+    Available = 0,
+
+    /// <summary>Booked by a client (has a <see cref="Booking"/>).</summary>
+    BookedByClient = 2,
+
+    /// <summary>Manually blocked by the provider in Admin.</summary>
+    ReservedByAdmin = 3,
 }

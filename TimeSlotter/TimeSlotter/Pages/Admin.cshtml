@@ -2,146 +2,1009 @@
 @model TimeSlotter.Pages.AdminModel
 @{
     ViewData["Title"] = "Admin";
-}
-
-@section Head {
-    <script src="https://cdn.tailwindcss.com"></script>
+    var bookingSlugEscaped = Uri.EscapeDataString(Model.BookingLinkSlug);
+    var initialBookingFullUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/Booking?slug={bookingSlugEscaped}&date={Model.ScheduleInitialDate}";
 }
 
 @*
-  h-[calc(100vh-3.5rem)] matches navbar row height (Tailwind h-14).
-  flex + min-h-0 lets the right column scroll internally without scrolling the document.
+  Single list: #unifiedTimeline merges existingSlots (DB) + draftSlots (id <= 0), sorted by start.
 *@
-<div class="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
-    <header class="shrink-0 pb-4">
-        <h1 class="text-2xl font-semibold tracking-tight text-white">Admin</h1>
-        <p class="mt-1 text-sm text-slate-400">Manage time slots and availability.</p>
-    </header>
+<form id="adminCsrfForm" class="sr-only" aria-hidden="true">@Html.AntiForgeryToken()</form>
+<script type="application/json" id="initialExistingSlots">@Html.Raw(Model.InitialSlotsJson)</script>
 
+<div class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
+    @if (!string.IsNullOrEmpty(Model.PromoBookingPath))
+    {
+        <div id="adminSavePromo" class="mb-4 shrink-0 rounded-xl border border-green-500 bg-green-500/10 px-4 py-4 shadow-lg ring-1 ring-green-500/30">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-green-100">Успіх — слоти збережено</p>
+                    <p class="mt-1 text-xs text-green-200/90">Повне посилання для клієнтів:</p>
+                    <p id="promoBookingFullUrl" class="mt-2 break-all font-mono text-sm text-blue-200" data-relative="@Model.PromoBookingPath"></p>
+                    <a id="promoBookingLink" href="@Model.PromoBookingPath" class="sr-only" tabindex="-1">@Model.PromoBookingPath</a>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <button type="button" id="copyLinkBtn"
+                            class="rounded-lg border border-green-500/60 bg-green-600/20 px-3 py-2 text-xs font-medium text-green-100 hover:bg-green-600/35"
+                            onclick="copyBookingLink(document.getElementById('promoBookingLink').getAttribute('href'));">
+                        Копіювати посилання
+                    </button>
+                    <button type="button" id="dismissSavePromoBtn"
+                            class="rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800">
+                        Закрити
+                    </button>
+                </div>
+            </div>
+        </div>
+        <script>
+            (function () {
+                var rel = document.getElementById('promoBookingLink') && document.getElementById('promoBookingLink').getAttribute('href');
+                var el = document.getElementById('promoBookingFullUrl');
+                if (el && rel) el.textContent = window.location.origin + rel;
+            })();
+            function copyBookingLink(url) {
+                if (!url) return;
+                const fullUrl = window.location.origin + url;
+                navigator.clipboard.writeText(fullUrl).then(() => {
+                    const btn = document.getElementById('copyLinkBtn');
+                    if (!btn) return;
+                    const originalText = btn.innerText;
+                    btn.innerText = '✅ Скопійовано!';
+                    setTimeout(() => { btn.innerText = originalText; }, 2000);
+                }).catch(function () {
+                    const btn = document.getElementById('copyLinkBtn');
+                    if (btn) btn.innerText = 'Помилка';
+                });
+            }
+        </script>
+    }
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
-        @* Left: calendar + generator *@
         <aside class="flex min-h-0 flex-col lg:h-full">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
                 <div class="min-h-0 flex-1 overflow-y-auto p-6">
-                    <section aria-label="Calendar preview">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h2 class="text-sm font-medium text-slate-300">April 2026</h2>
-                            <div class="flex gap-1">
-                                <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&lsaquo;</span>
-                                <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&rsaquo;</span>
-                            </div>
-                        </div>
-                        <div class="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-                        </div>
-                        <div class="grid grid-cols-7 gap-1">
-                            @for (var i = 0; i < 28; i++)
-                            {
-                                var day = i + 1;
-                                var isToday = day == 2;
-                                <div class="@(isToday ? "border-blue-500 bg-blue-600/20 text-blue-200" : "border-slate-700/80 text-slate-300") flex aspect-square items-center justify-center rounded-lg border text-xs font-medium">
-                                    @day
-                                </div>
-                            }
-                        </div>
-                    </section>
-
-                    <hr class="my-6 border-slate-700/60"/>
-
-                    <section aria-label="Share Link">
-                        <h2 class="mb-3 text-sm font-medium text-slate-300">Share Link</h2>
-                        <label for="shareDateInput" class="mb-1 block text-xs text-slate-500">Date</label>
-                        <input id="shareDateInput" type="date" class="mb-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-blue-500/40 focus:border-blue-500 focus:ring-2 focus:ring-blue-500" />
-                        <button id="copyLinkBtn" type="button" class="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-slate-900" data-base-url="/u/@Model.Provider.Slug">
-                            Copy Link
-                        </button>
-                    </section>
-
-                    <hr class="my-6 border-slate-700/60"/>
-
-                    <section aria-label="Slot generator">
+                    <section aria-label="Slot draft generator">
                         <h2 class="mb-3 text-sm font-medium text-slate-300">Slot generator</h2>
-                        <label for="slotCountInput" class="mb-1 block text-xs text-slate-500">Number of slots (max 96)</label>
-                        <input id="slotCountInput"
-                               type="number"
-                               min="0"
-                               max="96"
-                               value="0"
-                               class="mb-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-blue-500/40 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"/>
-                        <button id="generateSlotsBtn"
-                                type="button"
-                                class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
-                            Generate
-                        </button>
+                        <form id="slotDraftForm" method="post" asp-page-handler="Save" class="space-y-4">
+                            <div>
+                                <label for="targetDate" class="mb-1 block text-xs text-slate-500">Target date</label>
+                                <input id="targetDate" type="date" required value="@Model.ScheduleInitialDate"
+                                       class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label for="startTime" class="mb-1 block text-xs text-slate-500">Start time</label>
+                                    <input id="startTime" type="time" step="60" value="09:00" required
+                                           class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
+                                </div>
+                                <div>
+                                    <label for="endTime" class="mb-1 block text-xs text-slate-500">End time</label>
+                                    <input id="endTime" type="time" step="60" value="17:00" required
+                                           class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="strategy" class="mb-1 block text-xs text-slate-500">Strategy</label>
+                                <select id="strategy"
+                                        class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6">
+                                    <option value="interval">Fixed interval (minutes per slot)</option>
+                                    <option value="equal">Equal split (number of slots)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="generationValue" class="mb-1 block text-xs text-slate-500">
+                                    <span id="generationLabel">Interval (minutes)</span>
+                                </label>
+                                <input id="generationValue" type="number" min="1" max="480" value="60" required
+                                       class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
+                            </div>
+                            <p class="text-xs text-slate-500" id="strategyHelp">Each slot will be this many minutes long, placed back-to-back from start until end.</p>
+
+                            <button type="button" id="generatePreviewBtn"
+                                    class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+                                Generate preview
+                            </button>
+
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <button type="submit" id="saveDraftBtn"
+                                        class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-45 sm:col-span-2">
+                                    Save to database
+                                </button>
+                                <button type="button" id="clearDayBtn" disabled
+                                        class="w-full rounded-lg border border-red-500/50 bg-red-950/40 px-4 py-2.5 text-sm font-medium text-red-300 transition hover:bg-red-950/60 focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800/50 disabled:text-slate-600 sm:col-span-2">
+                                    Очистити день
+                                </button>
+                            </div>
+                        </form>
                     </section>
                 </div>
             </div>
         </aside>
 
-        @* Right: starts empty; filled by script on Generate (capped at 96). *@
-        <section class="flex min-h-0 flex-col lg:h-full" aria-label="Generated slots">
-            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5">
-                <div class="mb-4 flex shrink-0 items-center justify-between">
-                    <h2 class="text-sm font-medium text-slate-300">Time slots</h2>
-                    <span id="slotsCountBadge" class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-400">0 slots</span>
+        <section class="flex min-h-0 flex-1 flex-col lg:min-h-0 lg:h-full" aria-label="Schedule timeline">
+            <div class="flex min-h-0 min-h-[min(100%,calc(100vh-5rem))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5">
+                <div id="adminPermanentBookingCard" class="mb-4 shrink-0 rounded-xl border border-slate-700 bg-slate-800/50 p-4 ring-1 ring-white/5" data-booking-slug="@Model.BookingLinkSlug">
+                    <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Посилання для бронювання</h3>
+                    <p class="mt-1 text-[11px] leading-snug text-slate-500">Публічне посилання для обраної дати (як у полі Target date). Оновлюється автоматично.</p>
+                    @if (string.IsNullOrEmpty(Model.BookingLinkSlug))
+                    {
+                        <p class="mt-2 text-xs text-amber-200/90">Додайте slug профілю, щоб посилання працювало для клієнтів.</p>
+                    }
+                    <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                        <input id="permanentBookingLinkInput" type="text" readonly
+                               value="@initialBookingFullUrl"
+                               class="min-w-0 flex-1 cursor-text select-all rounded-lg border border-slate-600 bg-slate-950/80 px-3 py-2 font-mono text-xs text-slate-200 shadow-inner ring-0 placeholder:text-slate-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                               autocomplete="off" spellcheck="false" aria-label="Повне посилання для бронювання"/>
+                        <button type="button" id="permanentBookingCopyBtn"
+                                class="shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 sm:self-center">
+                            Копіювати
+                        </button>
+                    </div>
+                    <p id="permanentBookingCopyFeedback" class="mt-2 hidden text-xs font-medium text-green-400" role="status">✅ Copied!</p>
                 </div>
-                <div id="slotsContainer" class="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1"></div>
+                <div class="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-medium text-slate-300">Schedule timeline</h2>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span id="timelineCountBadge" class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-400">0</span>
+                        <button type="button" id="scheduleRefreshBtn"
+                                class="rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                            Refresh
+                        </button>
+                        <button type="button" id="clearAllBtn"
+                                class="rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                            Clear draft
+                        </button>
+                    </div>
+                </div>
+                <p class="mb-2 shrink-0 text-xs text-slate-500">One chronological list for the target date. Polls every 30s.</p>
+                <p id="scheduleHint" class="mb-3 hidden shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200" role="status"></p>
+                <div id="draftValidationWarning" class="mb-3 hidden shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" role="alert"></div>
+                <input type="hidden" name="FinalSlotsJson" id="finalSlotsJson" value="" form="slotDraftForm"/>
+
+                <div id="timelineEmptyState" class="flex min-h-0 flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-950/30 p-6 text-center">
+                    <p class="text-sm text-slate-500">No slots for this date. Use <span class="text-slate-400">Generate preview</span> or load saved slots.</p>
+                </div>
+                <div id="unifiedTimeline" class="hidden min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto overflow-x-hidden pr-1"></div>
             </div>
         </section>
+    </div>
+</div>
+
+<div id="clearDayModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]" aria-hidden="true" aria-labelledby="clearDayModalTitle" role="dialog">
+    <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl ring-1 ring-white/10">
+        <h3 id="clearDayModalTitle" class="mb-2 text-lg font-semibold text-white">Очистити день?</h3>
+        <p id="clearDayModalText" class="mb-6 text-sm leading-relaxed text-slate-400"></p>
+        <div class="flex flex-wrap justify-end gap-2">
+            <button type="button" id="clearDayModalCancel"
+                    class="rounded-lg border border-slate-600 bg-transparent px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800">
+                Скасувати
+            </button>
+            <button type="button" id="clearDayModalConfirm"
+                    class="rounded-lg border border-red-600 bg-red-600/25 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-600/40">
+                Очистити всі збережені слоти
+            </button>
+        </div>
     </div>
 </div>
 
 @section Scripts {
     <script>
         (function () {
-            const input = document.getElementById('slotCountInput');
-            const btn = document.getElementById('generateSlotsBtn');
-            const container = document.getElementById('slotsContainer');
-            const badge = document.getElementById('slotsCountBadge');
-            const maxSlots = 96;
+            window.draftSlots = window.draftSlots || [];
+            window.existingSlots = window.existingSlots || [];
 
-            function setBadge(count) {
-                if (!badge) return;
-                badge.textContent = count === 1 ? '1 slot' : count + ' slots';
+            const maxSlots = 96;
+            let nextDraftId = -1;
+
+            const targetDate = document.getElementById('targetDate');
+            const startTimeEl = document.getElementById('startTime');
+            const endTimeEl = document.getElementById('endTime');
+            const strategy = document.getElementById('strategy');
+            const generationValue = document.getElementById('generationValue');
+            const generationLabel = document.getElementById('generationLabel');
+            const strategyHelp = document.getElementById('strategyHelp');
+            const generateBtn = document.getElementById('generatePreviewBtn');
+            const clearBtn = document.getElementById('clearAllBtn');
+            const refreshBtn = document.getElementById('scheduleRefreshBtn');
+            const form = document.getElementById('slotDraftForm');
+            const finalJson = document.getElementById('finalSlotsJson');
+            const saveBtn = document.getElementById('saveDraftBtn');
+            const clearDayBtn = document.getElementById('clearDayBtn');
+            const clearDayModal = document.getElementById('clearDayModal');
+            const clearDayModalText = document.getElementById('clearDayModalText');
+            const clearDayModalCancel = document.getElementById('clearDayModalCancel');
+            const clearDayModalConfirm = document.getElementById('clearDayModalConfirm');
+            const unifiedTimeline = document.getElementById('unifiedTimeline');
+            const timelineEmpty = document.getElementById('timelineEmptyState');
+            const timelineBadge = document.getElementById('timelineCountBadge');
+            const validationWarning = document.getElementById('draftValidationWarning');
+            const scheduleHint = document.getElementById('scheduleHint');
+            const csrfForm = document.getElementById('adminCsrfForm');
+            const initialEl = document.getElementById('initialExistingSlots');
+            const permanentBookingCard = document.getElementById('adminPermanentBookingCard');
+            const permanentBookingInput = document.getElementById('permanentBookingLinkInput');
+            const permanentBookingCopyBtn = document.getElementById('permanentBookingCopyBtn');
+            const permanentBookingCopyFeedback = document.getElementById('permanentBookingCopyFeedback');
+
+            let pollTimer = null;
+
+            function normalizeRow(row) {
+                if (typeof row.statusCode === 'number') return row;
+                var st = row.status || '';
+                row.statusCode = st === 'Available' ? 0 : st === 'BookedByClient' ? 2 : st === 'ReservedByAdmin' ? 3 : 0;
+                return row;
             }
 
-            btn?.addEventListener('click', function () {
-                let n = parseInt(input?.value ?? '0', 10);
-                if (Number.isNaN(n) || n < 0) n = 0;
-                if (n > maxSlots) n = maxSlots;
-                if (input) input.value = String(n);
+            (function seedExisting() {
+                if (!initialEl || !initialEl.textContent || !initialEl.textContent.trim()) return;
+                try {
+                    var o = JSON.parse(initialEl.textContent);
+                    var arr = o.slots || [];
+                    window.existingSlots = arr.map(normalizeRow);
+                } catch (e) { /* ignore */ }
+            })();
 
-                if (!container) return;
-                container.innerHTML = '';
-                for (let i = 1; i <= n; i++) {
-                    const article = document.createElement('article');
-                    article.className = 'flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/50 px-4 py-3 ring-1 ring-white/5';
-                    article.innerHTML =
-                        '<span class="font-mono text-sm text-slate-500">Slot #' + i + '</span>' +
-                        '<span class="shrink-0 rounded-full border border-slate-600 px-2.5 py-0.5 text-xs font-medium text-slate-400">Empty</span>';
-                    container.appendChild(article);
+            function getCsrfToken() {
+                const el = csrfForm && csrfForm.querySelector('input[name="__RequestVerificationToken"]');
+                return el ? el.value : '';
+            }
+
+            function adminUrl(handler, extra) {
+                var u = new URL(window.location.href);
+                u.search = '';
+                u.searchParams.set('handler', handler);
+                if (extra) {
+                    Object.keys(extra).forEach(function (k) {
+                        if (extra[k] != null) u.searchParams.set(k, String(extra[k]));
+                    });
                 }
-                setBadge(n);
+                return u.toString();
+            }
+
+            function showScheduleHint(msg) {
+                if (!scheduleHint) return;
+                scheduleHint.textContent = msg;
+                scheduleHint.classList.remove('hidden');
+            }
+
+            function hideScheduleHint() {
+                if (!scheduleHint) return;
+                scheduleHint.classList.add('hidden');
+                scheduleHint.textContent = '';
+            }
+
+            function hideValidation() {
+                if (!validationWarning) return;
+                validationWarning.classList.add('hidden');
+                validationWarning.textContent = '';
+            }
+
+            function showValidation(msg) {
+                if (!validationWarning) return;
+                validationWarning.textContent = msg;
+                validationWarning.classList.remove('hidden');
+            }
+
+            function todayYmd() {
+                const d = new Date();
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+            if (targetDate && !targetDate.value) targetDate.value = todayYmd();
+
+            function getBookingSlugForUrl() {
+                return (permanentBookingCard && permanentBookingCard.getAttribute('data-booking-slug')) || '';
+            }
+
+            function updatePermanentBookingLink() {
+                if (!permanentBookingInput || !targetDate) return;
+                var slug = getBookingSlugForUrl();
+                var ymd = targetDate.value || '';
+                if (!ymd) return;
+                permanentBookingInput.value = window.location.origin + '/Booking?slug=' + encodeURIComponent(slug) + '&date=' + encodeURIComponent(ymd);
+            }
+
+            function showPermanentBookingCopied() {
+                if (!permanentBookingCopyFeedback) return;
+                permanentBookingCopyFeedback.classList.remove('hidden');
+                window.clearTimeout(showPermanentBookingCopied._t);
+                showPermanentBookingCopied._t = window.setTimeout(function () {
+                    permanentBookingCopyFeedback.classList.add('hidden');
+                }, 2000);
+            }
+
+            function copyPermanentBookingLink() {
+                var input = permanentBookingInput;
+                if (!input || !input.value) return;
+
+                function fallbackCopy() {
+                    var prevReadonly = input.readOnly;
+                    input.readOnly = false;
+                    input.focus();
+                    input.select();
+                    input.setSelectionRange(0, input.value.length);
+                    try {
+                        if (document.execCommand('copy')) showPermanentBookingCopied();
+                    } catch (e) { /* ignore */ }
+                    input.readOnly = prevReadonly;
+                }
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(input.value).then(showPermanentBookingCopied).catch(fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            }
+
+            permanentBookingCopyBtn?.addEventListener('click', copyPermanentBookingLink);
+            updatePermanentBookingLink();
+
+            function hmToMinutes(hm) {
+                if (!hm) return 0;
+                const p = String(hm).split(':');
+                return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+            }
+
+            function minutesToHm(mins) {
+                const h = Math.floor(mins / 60) % 24;
+                const m = Math.max(0, Math.min(59, mins % 60));
+                return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+            }
+
+            function durationMinutes(s, e) {
+                return Math.max(0, hmToMinutes(e) - hmToMinutes(s));
+            }
+
+            function formatDurationBadge(s, e) {
+                const m = durationMinutes(s, e);
+                if (m <= 0) return '0m';
+                if (m >= 60 && m % 60 === 0) return (m / 60) + 'h';
+                if (m >= 60) return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+                return m + 'm';
+            }
+
+            function newSlot(startTime, endTime, date, resourceContext) {
+                return {
+                    id: nextDraftId--,
+                    startTime: startTime,
+                    endTime: endTime,
+                    date: date,
+                    status: 'normal',
+                    isManual: false,
+                    resourceContext: resourceContext || ''
+                };
+            }
+
+            function findSlot(id) {
+                return window.draftSlots.find(function (x) { return x.id === id; });
+            }
+
+            function normResource(v) {
+                return String(v || '').trim();
+            }
+
+            function sameResourceContext(a, b) {
+                return normResource(a) === normResource(b);
+            }
+
+            /** True when [aStart,aEnd) overlaps [bStart,bEnd) in minutes (same day). */
+            function intervalOverlapsMinutes(aStart, aEnd, bStart, bEnd) {
+                return aStart < bEnd && bStart < aEnd;
+            }
+
+            /** Marks draft slots that overlap persisted slots for the same date and resource. */
+            function markDraftExistingCollisions() {
+                var ymd = targetDate && targetDate.value;
+                (window.draftSlots || []).forEach(function (s) {
+                    s.existingOverlap = false;
+                });
+                if (!ymd) return;
+
+                var existing = (window.existingSlots || []).filter(function (r) {
+                    return r.date === ymd && r.id > 0;
+                });
+
+                (window.draftSlots || []).forEach(function (d) {
+                    if (d.date !== ymd || d.id > 0) return;
+                    if (hmToMinutes(d.startTime) >= hmToMinutes(d.endTime)) return;
+                    var ds = hmToMinutes(d.startTime);
+                    var de = hmToMinutes(d.endTime);
+                    for (var i = 0; i < existing.length; i++) {
+                        var e = existing[i];
+                        if (!sameResourceContext(d.resourceContext, e.resourceContext)) continue;
+                        var es = hmToMinutes(e.start);
+                        var ee = hmToMinutes(e.end);
+                        if (intervalOverlapsMinutes(ds, de, es, ee)) {
+                            d.existingOverlap = true;
+                            return;
+                        }
+                    }
+                });
+            }
+
+            function hasExistingScheduleConflict() {
+                return window.draftSlots.some(function (s) { return s.existingOverlap === true; });
+            }
+
+            function hasDraftDraftIssues() {
+                return window.draftSlots.some(function (s) {
+                    return s.status === 'conflict' || s.status === 'invalid';
+                });
+            }
+
+            function hasBlockingIssues() {
+                return hasDraftDraftIssues() || hasExistingScheduleConflict();
+            }
+
+            function updateSaveButtonAndWarnings() {
+                var blocked = hasBlockingIssues();
+                if (saveBtn) {
+                    saveBtn.disabled = blocked;
+                }
+                if (hasExistingScheduleConflict()) {
+                    showValidation('Conflict detected in schedule!');
+                } else if (hasDraftDraftIssues()) {
+                    showValidation('Fix overlapping or invalid draft times before saving.');
+                } else {
+                    hideValidation();
+                }
+            }
+
+            /** Merges existingSlots + draftSlots for selected date, sorted by start time. */
+            function buildMergedItems() {
+                var ymd = targetDate && targetDate.value;
+                if (!ymd) return [];
+                var out = [];
+                (window.existingSlots || []).forEach(function (row) {
+                    normalizeRow(row);
+                    if (row.date === ymd && row.id > 0)
+                        out.push({ kind: 'saved', row: row, startMin: hmToMinutes(row.start) });
+                });
+                (window.draftSlots || []).forEach(function (s) {
+                    if (s.date === ymd && s.id <= 0)
+                        out.push({ kind: 'draft', slot: s, startMin: hmToMinutes(s.startTime) });
+                });
+                out.sort(function (a, b) {
+                    if (a.startMin !== b.startMin) return a.startMin - b.startMin;
+                    if (a.kind === b.kind) return 0;
+                    return a.kind === 'saved' ? -1 : 1;
+                });
+                return out;
+            }
+
+            /**
+             * Saved row: statusCode 0 = Block, 3 = Unblock, 2 = booked (read-only).
+             * @@param {object} row
+             */
+            function savedRowEl(row) {
+                const wrap = document.createElement('div');
+                var code = row.statusCode;
+                var box = 'rounded-xl p-3 ring-1 ring-inset transition-colors ';
+                if (code === 2) {
+                    box += 'border border-amber-500 bg-amber-500/20 text-amber-50 ring-amber-500/25 ';
+                } else if (code === 3) {
+                    box += 'border border-slate-700 bg-slate-800 text-slate-400 ring-slate-600/40 ';
+                } else {
+                    box += 'border border-blue-500 bg-slate-950/30 text-white ring-blue-500/25 ';
+                }
+                wrap.className = box;
+                wrap.dataset.savedSlotId = String(row.id);
+
+                const top = document.createElement('div');
+                top.className = 'mb-2 flex flex-wrap items-center justify-between gap-2';
+                const when = document.createElement('span');
+                when.className = 'font-mono text-sm ' + (code === 3 ? 'text-slate-400' : 'text-white');
+                var rc = row.resourceContext ? ' · ' + row.resourceContext : '';
+                when.textContent = row.start + ' – ' + row.end + rc;
+                const dur = document.createElement('span');
+                dur.className = 'rounded-full border px-2 py-0.5 text-xs font-medium ' + (
+                    code === 2 ? 'border-amber-500/50 bg-amber-500/10 text-amber-100' :
+                    code === 3 ? 'border-slate-600 bg-slate-900 text-slate-400' :
+                    'border-blue-500/40 bg-slate-900 text-blue-100');
+                dur.textContent = formatDurationBadge(row.start, row.end);
+                top.appendChild(when);
+                top.appendChild(dur);
+                wrap.appendChild(top);
+
+                if (code === 2) {
+                    const lbl = document.createElement('p');
+                    lbl.className = 'mb-1 text-xs font-semibold uppercase tracking-wide text-amber-200/90';
+                    lbl.textContent = 'Booked by Client';
+                    wrap.appendChild(lbl);
+                    const det = document.createElement('p');
+                    det.className = 'mb-2 text-xs text-amber-100/80';
+                    det.textContent = (row.clientName || '—') + ' · ' + (row.clientPhone || '—');
+                    wrap.appendChild(det);
+                }
+
+                const actions = document.createElement('div');
+                actions.className = 'mt-1 flex flex-wrap items-center gap-2';
+
+                if (code === 0) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'rounded-lg border border-blue-400/60 bg-blue-600/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600/40';
+                    btn.textContent = 'Block';
+                    btn.addEventListener('click', function () {
+                        toggleStatus(row.id);
+                    });
+                    actions.appendChild(btn);
+                } else if (code === 3) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'rounded-lg border border-slate-600 bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600/60';
+                    btn.textContent = 'Unblock';
+                    btn.addEventListener('click', function () {
+                        toggleStatus(row.id);
+                    });
+                    actions.appendChild(btn);
+                }
+
+                if (row.id > 0) {
+                    const delBtn = document.createElement('button');
+                    delBtn.type = 'button';
+                    delBtn.className = 'ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/15 hover:text-red-300';
+                    delBtn.innerHTML = '<span aria-hidden="true" class="text-base leading-none">\u00D7</span> Delete';
+                    delBtn.setAttribute('onclick', 'window.deleteSavedSlot(' + row.id + '); return false;');
+                    actions.appendChild(delBtn);
+                }
+
+                wrap.appendChild(actions);
+                return wrap;
+            }
+
+            /**
+             * Draft: id <= 0, green dashed, Remove.
+             * @@param {object} slot
+             */
+            function draftRowEl(slot) {
+                const wrap = document.createElement('div');
+                var box;
+                if (slot.existingOverlap) {
+                    box = 'rounded-xl p-3 ring-1 ring-inset border-2 border-red-500 bg-red-900/50 transition-colors ring-red-500/40 ';
+                } else if (slot.status === 'conflict') {
+                    box = 'rounded-xl p-3 ring-1 ring-inset border-2 border-dashed border-red-500 bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.25)] ring-red-500/30 ';
+                } else if (slot.status === 'invalid') {
+                    box = 'rounded-xl p-3 ring-1 ring-inset border-2 border-dashed border-red-400 bg-green-500/5 opacity-80 ring-red-400/25 ';
+                } else {
+                    box = 'rounded-xl p-3 ring-1 ring-inset border-2 border-dashed border-green-500 bg-green-500/5 transition-colors ';
+                }
+                wrap.className = box;
+                wrap.dataset.slotId = String(slot.id);
+
+                const topRow = document.createElement('div');
+                topRow.className = 'mb-2 flex items-center justify-between gap-2';
+                const badgeKind = document.createElement('span');
+                badgeKind.className = 'rounded-md bg-green-600/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-200';
+                badgeKind.textContent = 'Draft';
+                const badgeDur = document.createElement('span');
+                badgeDur.className = 'rounded-full border border-green-600/40 bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-green-100';
+                badgeDur.textContent = formatDurationBadge(slot.startTime, slot.endTime);
+                topRow.appendChild(badgeKind);
+                topRow.appendChild(badgeDur);
+
+                const row = document.createElement('div');
+                row.className = 'flex flex-wrap items-end gap-2';
+
+                const startLab = document.createElement('label');
+                startLab.className = 'sr-only';
+                startLab.htmlFor = 'st-' + slot.id;
+                startLab.textContent = 'Start';
+                const startIn = document.createElement('input');
+                startIn.type = 'time';
+                startIn.step = '60';
+                startIn.id = 'st-' + slot.id;
+                startIn.value = slot.startTime;
+                startIn.className = 'block rounded-md border-0 bg-slate-800 py-1 pl-2 pr-2 text-sm text-white shadow-sm ring-1 ring-inset ring-green-900/50 focus:ring-2 focus:ring-green-500';
+
+                const endLab = document.createElement('label');
+                endLab.className = 'sr-only';
+                endLab.htmlFor = 'en-' + slot.id;
+                endLab.textContent = 'End';
+                const endIn = document.createElement('input');
+                endIn.type = 'time';
+                endIn.step = '60';
+                endIn.id = 'en-' + slot.id;
+                endIn.value = slot.endTime;
+                endIn.className = 'block rounded-md border-0 bg-slate-800 py-1 pl-2 pr-2 text-sm text-white shadow-sm ring-1 ring-inset ring-green-900/50 focus:ring-2 focus:ring-green-500';
+
+                const res = document.createElement('input');
+                res.type = 'text';
+                res.placeholder = 'Room / context';
+                res.value = slot.resourceContext || '';
+                res.className = 'min-w-[6rem] flex-1 rounded-md border-0 bg-slate-800/80 py-1 px-2 text-xs text-white placeholder-slate-500 ring-1 ring-inset ring-green-900/40 focus:ring-2 focus:ring-green-500';
+                res.addEventListener('change', function () {
+                    const s = findSlot(slot.id);
+                    if (s) { s.resourceContext = res.value; s.isManual = true; }
+                    renderSlots();
+                });
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'shrink-0 rounded-lg border border-green-600/50 bg-green-600/20 px-3 py-1.5 text-xs font-medium text-green-100 hover:bg-green-600/30';
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', function () {
+                    window.draftSlots = window.draftSlots.filter(function (x) { return x.id !== slot.id; });
+                    renderSlots();
+                });
+
+                function onTimeChanged() {
+                    const s = findSlot(slot.id);
+                    if (!s) return;
+                    s.startTime = startIn.value;
+                    s.endTime = endIn.value;
+                    s.isManual = true;
+                    renderSlots();
+                }
+                startIn.addEventListener('change', onTimeChanged);
+                endIn.addEventListener('change', onTimeChanged);
+
+                row.appendChild(startLab);
+                row.appendChild(startIn);
+                row.appendChild(endLab);
+                row.appendChild(endIn);
+                row.appendChild(res);
+                row.appendChild(removeBtn);
+
+                wrap.appendChild(topRow);
+                wrap.appendChild(row);
+                return wrap;
+            }
+
+            function syncRowStatusFromCode(row, code) {
+                row.statusCode = code;
+                row.status = code === 0 ? 'Available' : code === 2 ? 'BookedByClient' : code === 3 ? 'ReservedByAdmin' : row.status;
+            }
+
+            async function toggleStatus(slotId) {
+                var row = window.existingSlots.find(function (r) { return r.id === slotId; });
+                if (!row || row.id <= 0) return;
+                normalizeRow(row);
+                if (row.statusCode === 2) return;
+
+                var prev = row.statusCode;
+                if (prev !== 0 && prev !== 3) return;
+
+                var optimistic = prev === 0 ? 3 : 0;
+                syncRowStatusFromCode(row, optimistic);
+                renderSlots();
+
+                var body = new URLSearchParams();
+                body.set('id', String(slotId));
+                body.set('__RequestVerificationToken', getCsrfToken());
+                try {
+                    var res = await fetch(adminUrl('UpdateStatus'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (e) { /* ignore */ }
+                    if (!res.ok || !data.success) {
+                        syncRowStatusFromCode(row, prev);
+                        renderSlots();
+                        showScheduleHint(data.error || ('Could not update slot (' + res.status + ')'));
+                        return;
+                    }
+                    if (typeof data.newStatus === 'number') {
+                        syncRowStatusFromCode(row, data.newStatus);
+                    }
+                    hideScheduleHint();
+                    renderSlots();
+                } catch (e) {
+                    syncRowStatusFromCode(row, prev);
+                    renderSlots();
+                    showScheduleHint('Network error while updating slot.');
+                }
+            }
+
+            function validateAllSlots() {
+                window.draftSlots.forEach(function (s) {
+                    s.status = 'normal';
+                });
+
+                window.draftSlots.forEach(function (s) {
+                    if (hmToMinutes(s.startTime) >= hmToMinutes(s.endTime)) {
+                        s.status = 'invalid';
+                    }
+                });
+
+                const sortedIdx = window.draftSlots
+                    .map(function (s, i) { return { i: i, m: hmToMinutes(s.startTime) }; })
+                    .sort(function (a, b) { return a.m - b.m; });
+
+                for (let k = 0; k < sortedIdx.length - 1; k++) {
+                    const a = window.draftSlots[sortedIdx[k].i];
+                    const b = window.draftSlots[sortedIdx[k + 1].i];
+                    if (a.status === 'invalid' || b.status === 'invalid') continue;
+                    if (hmToMinutes(a.endTime) > hmToMinutes(b.startTime)) {
+                        a.status = 'conflict';
+                        b.status = 'conflict';
+                    }
+                }
+            }
+
+            function openClearDayModal() {
+                var d = targetDate && targetDate.value;
+                if (!d || !clearDayModal) return;
+                if (clearDayModalText) {
+                    clearDayModalText.textContent = 'Усі збережені слоти за ' + d + ' будуть видалені. Чернетки не зміняться. Продовжити?';
+                }
+                clearDayModal.classList.remove('hidden');
+                clearDayModal.classList.add('flex');
+                clearDayModal.setAttribute('aria-hidden', 'false');
+            }
+
+            function closeClearDayModal() {
+                if (!clearDayModal) return;
+                clearDayModal.classList.add('hidden');
+                clearDayModal.classList.remove('flex');
+                clearDayModal.setAttribute('aria-hidden', 'true');
+            }
+
+            async function deleteSavedSlot(id) {
+                var el = document.querySelector('[data-saved-slot-id="' + id + '"]');
+                if (el) {
+                    el.style.transition = 'opacity 0.22s ease';
+                    requestAnimationFrame(function () {
+                        el.style.opacity = '0';
+                    });
+                }
+                var body = new URLSearchParams();
+                body.set('id', String(id));
+                body.set('__RequestVerificationToken', getCsrfToken());
+                try {
+                    var res = await fetch(adminUrl('DeleteSlot'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (e) { /* ignore */ }
+                    if (!res.ok || !data.success) {
+                        if (el) el.style.opacity = '1';
+                        showScheduleHint(data.error || 'Could not delete slot.');
+                        return;
+                    }
+                    hideScheduleHint();
+                    var refresh = function () { fetchExistingSnapshots(); };
+                    if (el) setTimeout(refresh, 230);
+                    else refresh();
+                } catch (e) {
+                    if (el) el.style.opacity = '1';
+                    showScheduleHint('Network error while deleting.');
+                }
+            }
+            window.deleteSavedSlot = deleteSavedSlot;
+
+            async function clearDay() {
+                openClearDayModal();
+            }
+
+            async function confirmClearDay() {
+                var d = targetDate && targetDate.value;
+                if (!d) {
+                    closeClearDayModal();
+                    return;
+                }
+                var body = new URLSearchParams();
+                body.set('date', d);
+                body.set('__RequestVerificationToken', getCsrfToken());
+                try {
+                    var res = await fetch(adminUrl('ClearDay'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (e2) { /* ignore */ }
+                    if (!res.ok || !data.success) {
+                        showScheduleHint(data.error || 'Could not clear day.');
+                        closeClearDayModal();
+                        return;
+                    }
+                    hideScheduleHint();
+                    closeClearDayModal();
+                    await fetchExistingSnapshots();
+                } catch (e3) {
+                    showScheduleHint('Network error while clearing day.');
+                    closeClearDayModal();
+                }
+            }
+
+            clearDayModalCancel?.addEventListener('click', closeClearDayModal);
+            clearDayModalConfirm?.addEventListener('click', function () {
+                confirmClearDay();
+            });
+            clearDayModal?.addEventListener('click', function (ev) {
+                if (ev.target === clearDayModal) closeClearDayModal();
+            });
+            clearDayBtn?.addEventListener('click', function () {
+                if (clearDayBtn.disabled) return;
+                clearDay();
             });
 
-            const copyLinkBtn = document.getElementById('copyLinkBtn');
-            const shareDateInput = document.getElementById('shareDateInput');
+            async function fetchExistingSnapshots() {
+                var d = targetDate && targetDate.value;
+                if (!d || !unifiedTimeline) return;
+                try {
+                    var res = await fetch(adminUrl('SlotSnapshots', { date: d }), {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) throw new Error('bad');
+                    var data = await res.json();
+                    var arr = (data.slots || []).map(normalizeRow);
+                    window.existingSlots = arr;
+                    hideScheduleHint();
+                    renderSlots();
+                } catch (e) {
+                    showScheduleHint('Could not refresh saved slots. Check your connection or use Refresh.');
+                }
+            }
 
-            copyLinkBtn?.addEventListener('click', function () {
-                const basePath = copyLinkBtn.getAttribute('data-base-url');
-                if (!basePath) {
+            function renderSlots() {
+                if (!unifiedTimeline || !timelineEmpty || !timelineBadge) return;
+
+                validateAllSlots();
+                markDraftExistingCollisions();
+                updateSaveButtonAndWarnings();
+
+                const merged = buildMergedItems();
+                var ymd = targetDate && targetDate.value;
+                var savedForDay = (window.existingSlots || []).filter(function (r) { return r.date === ymd && r.id > 0; }).length;
+                var draftForDay = (window.draftSlots || []).filter(function (s) { return s.date === ymd && s.id <= 0; }).length;
+                timelineBadge.textContent = savedForDay + ' saved · ' + draftForDay + ' draft';
+
+                if (clearDayBtn) {
+                    clearDayBtn.disabled = savedForDay === 0;
+                }
+
+                unifiedTimeline.className = 'hidden min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto overflow-x-hidden pr-1';
+
+                if (merged.length === 0) {
+                    unifiedTimeline.classList.add('hidden');
+                    timelineEmpty.classList.remove('hidden');
+                    unifiedTimeline.innerHTML = '';
                     return;
                 }
 
-                let url = window.location.origin + basePath;
-                if (shareDateInput && shareDateInput.value) {
-                    url += '?date=' + shareDateInput.value;
-                }
-                navigator.clipboard.writeText(url).then(function() {
-                    const originalText = copyLinkBtn.textContent;
-                    copyLinkBtn.textContent = 'Copied!';
-                    setTimeout(() => copyLinkBtn.textContent = originalText, 2000);
+                timelineEmpty.classList.add('hidden');
+                unifiedTimeline.classList.remove('hidden');
+                unifiedTimeline.classList.add('grid');
+                unifiedTimeline.innerHTML = '';
+
+                merged.forEach(function (item) {
+                    if (item.kind === 'saved')
+                        unifiedTimeline.appendChild(savedRowEl(item.row));
+                    else
+                        unifiedTimeline.appendChild(draftRowEl(item.slot));
                 });
+            }
+
+            function strategyUi() {
+                const isEqual = strategy && strategy.value === 'equal';
+                if (generationLabel) generationLabel.textContent = isEqual ? 'Number of slots' : 'Interval (minutes)';
+                if (strategyHelp) {
+                    strategyHelp.textContent = isEqual
+                        ? 'The window from start to end is split evenly into this many slots.'
+                        : 'Each slot will be this many minutes long, placed back-to-back from start until end.';
+                }
+                if (generationValue) {
+                    generationValue.min = '1';
+                    generationValue.max = isEqual ? String(maxSlots) : '480';
+                    if (isEqual && parseInt(generationValue.value, 10) > maxSlots) generationValue.value = String(maxSlots);
+                }
+            }
+            strategy?.addEventListener('change', strategyUi);
+            strategyUi();
+
+            function generateSlots() {
+                const dateVal = targetDate?.value;
+                const startVal = startTimeEl?.value;
+                const endVal = endTimeEl?.value;
+                const genRaw = parseInt(generationValue?.value ?? '0', 10);
+                if (!dateVal || !startVal || !endVal || !Number.isFinite(genRaw) || genRaw < 1) {
+                    alert('Please fill date, start/end times, and a valid generation value.');
+                    return;
+                }
+
+                const startM = hmToMinutes(startVal);
+                const endM = hmToMinutes(endVal);
+                if (endM <= startM) {
+                    alert('End time must be after start time.');
+                    return;
+                }
+
+                const out = [];
+                const strat = strategy?.value === 'equal' ? 'equal' : 'interval';
+
+                if (strat === 'interval') {
+                    const duration = genRaw;
+                    let cur = startM;
+                    while (cur + duration <= endM && out.length < maxSlots) {
+                        out.push(newSlot(minutesToHm(cur), minutesToHm(cur + duration), dateVal, ''));
+                        cur += duration;
+                    }
+                } else {
+                    const n = Math.min(genRaw, maxSlots);
+                    const span = endM - startM;
+                    if (n < 1) return;
+                    for (let i = 0; i < n && out.length < maxSlots; i++) {
+                        const a = startM + Math.round((span * i) / n);
+                        const b = startM + Math.round((span * (i + 1)) / n);
+                        if (b > a) out.push(newSlot(minutesToHm(a), minutesToHm(b), dateVal, ''));
+                    }
+                }
+
+                window.draftSlots = out;
+                renderSlots();
+            }
+
+            generateBtn?.addEventListener('click', function (e) {
+                e.preventDefault();
+                generateSlots();
+            });
+
+            clearBtn?.addEventListener('click', function () {
+                window.draftSlots = [];
+                hideValidation();
+                renderSlots();
+            });
+
+            form?.addEventListener('submit', function (e) {
+                renderSlots();
+
+                if (hasBlockingIssues()) {
+                    e.preventDefault();
+                    if (hasExistingScheduleConflict()) {
+                        showValidation('Conflict detected in schedule!');
+                    } else {
+                        showValidation('Fix overlapping or invalid draft times before saving.');
+                    }
+                    return;
+                }
+
+                if (window.draftSlots.length === 0) {
+                    if (!confirm('No draft slots to save. Submit anyway?')) {
+                        e.preventDefault();
+                        return;
+                    }
+                }
+
+                hideValidation();
+                const payload = window.draftSlots.map(function (s) {
+                    return {
+                        start: s.startTime,
+                        end: s.endTime,
+                        date: s.date,
+                        resourceContext: s.resourceContext || null
+                    };
+                });
+                if (finalJson) finalJson.value = JSON.stringify(payload);
+            });
+
+            targetDate?.addEventListener('change', function () {
+                updatePermanentBookingLink();
+                fetchExistingSnapshots();
+            });
+            refreshBtn?.addEventListener('click', function () {
+                fetchExistingSnapshots();
+            });
+
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(fetchExistingSnapshots, 30000);
+            fetchExistingSnapshots();
+
+            renderSlots();
+        })();
+
+        (function () {
+            var promo = document.getElementById('adminSavePromo');
+            var dismissBtn = document.getElementById('dismissSavePromoBtn');
+            dismissBtn?.addEventListener('click', function () {
+                if (promo) promo.classList.add('hidden');
             });
         })();
     </script>

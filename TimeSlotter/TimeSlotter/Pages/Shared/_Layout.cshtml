@@ -4,42 +4,39 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>@ViewData["Title"] - TimeSlotter</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
+    @* Tailwind only (no Bootstrap). Scoped CSS from Razor, if present. *@
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/TimeSlotter.styles.css" asp-append-version="true"/>
     @await RenderSectionAsync("Head", required: false)
 </head>
 @*
-  App shell: no document scroll — only inner panes (e.g. slot lists) scroll.
-  Navbar height is treated as h-14 (3.5rem) for content: h-[calc(100vh-3.5rem)] on app pages.
+  App shell: no document scroll — only inner panes scroll.
+  Navbar height matches h-16 (4rem): use h-[calc(100vh-4rem)] on full-height app pages.
 *@
-<body class="flex h-screen flex-col overflow-hidden">
+<body class="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100 antialiased">
 <header class="shrink-0">
     <div class="w-full border-b border-slate-800 bg-slate-900">
-        <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 sm:px-8">
-            <a asp-area="" asp-page="/Index" class="text-xl font-bold tracking-tight text-white">TimeSlotter</a>
+        <div class="mx-auto flex h-16 max-w-7xl items-center justify-between sm:px-6 lg:px-8">
+            @* Brand left — account actions right *@
+            <a asp-area="" asp-page="/Index" class="px-4 text-xl font-bold tracking-tight text-white sm:px-4"><span class="mx-2">Time-Slotter</span></a>
 
-            <div class="flex items-center gap-6">
-                <a asp-area="" asp-page="/Index" class="text-sm text-slate-400 transition-colors hover:text-white">Home</a>
-                <a asp-area="" asp-page="/Privacy" class="text-sm text-slate-400 transition-colors hover:text-white">Privacy</a>
-                <a asp-page="/User" class="text-sm text-slate-400 transition-colors hover:text-white">User</a>
-
+            <nav class="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 px-4 sm:px-4" aria-label="Account">
                 @if (User.Identity?.IsAuthenticated == true)
                 {
-                    <a asp-page="/Admin" class="text-sm text-slate-400 transition-colors hover:text-white">Admin</a>
-                    <form method="post" asp-page="/Index" asp-page-handler="Logout" class="m-0">
+                    <form method="post" asp-page="/Index" asp-page-handler="Logout" class="m-0 inline">
                         <button type="submit"
-                                class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none">
+                                class="mx-2 rounded-md px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900">
                             Logout
                         </button>
                     </form>
                 }
                 else
                 {
-                    <a asp-page="/Index" class="text-sm text-slate-400 transition-colors hover:text-white">Login</a>
-                    <a asp-page="/Register" class="text-sm text-slate-400 transition-colors hover:text-white">Register</a>
+                    <a asp-page="/Index" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Login</a>
+                    <a asp-page="/Register" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Register</a>
                 }
-            </div>
+            </nav>
         </div>
     </div>
 </header>
@@ -49,10 +46,7 @@
     </main>
 </div>
 
-<script src="~/lib/jquery/dist/jquery.min.js"></script>
-<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
-
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

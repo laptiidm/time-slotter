@@ -4,15 +4,11 @@
     ViewData["Title"] = "User";
 }
 
-@section Head {
-    <script src="https://cdn.tailwindcss.com"></script>
-}
-
 @*
-  Content height = viewport minus fixed navbar (h-14 / 3.5rem).
-  No page-level scroll; only the right column list area scrolls when content exists.
+  Content height = viewport minus _Layout navbar (h-16 / 4rem).
+  No page-level scroll; only the right column list scrolls when content exists.
 *@
-<div class="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
+<div class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
     <header class="shrink-0 pb-4">
         <h1 class="text-2xl font-semibold tracking-tight text-white">Book a slot</h1>
         <p class="mt-1 text-sm text-slate-400">Pick a date, then choose an available time.</p>
@@ -61,15 +57,32 @@
                         <div class="space-y-3">
                             @foreach (var slot in Model.AvailableSlots)
                             {
-                                <article class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/50 px-4 py-3 ring-1 ring-white/5">
-                                    <span class="font-mono text-sm text-slate-500">
-                                        @slot.StartTime.ToString("HH:mm")
-                                        @if (!string.IsNullOrEmpty(slot.ResourceContext))
+                                <article class="rounded-xl border border-slate-700/80 bg-slate-950/50 p-4 ring-1 ring-white/5">
+                                    <form method="post" asp-page-handler="Book" asp-route-slug="@Model.ProviderSlug" class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                                        <input type="hidden" name="date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")"/>
+                                        @if (!string.IsNullOrEmpty(Model.SelectedResource))
                                         {
-                                            <text> - @slot.ResourceContext</text>
+                                            <input type="hidden" name="resource" value="@Model.SelectedResource"/>
                                         }
-                                    </span>
-                                    <button class="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500">Book</button>
+                                        <input type="hidden" name="slotId" value="@slot.Id"/>
+                                        <div class="min-w-[7rem] font-mono text-sm text-slate-300">
+                                            @slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")
+                                            @if (!string.IsNullOrEmpty(slot.ResourceContext))
+                                            {
+                                                <span class="block text-xs font-sans text-slate-500">@slot.ResourceContext</span>
+                                            }
+                                        </div>
+                                        <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:gap-2">
+                                            <input name="customerName" type="text" required maxlength="120" placeholder="Your name"
+                                                   class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500"/>
+                                            <input name="customerPhone" type="tel" required maxlength="40" placeholder="Phone"
+                                                   class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500"/>
+                                        </div>
+                                        <button type="submit"
+                                                class="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500">
+                                            Book
+                                        </button>
+                                    </form>
                                 </article>
                             }
                         </div>
