@@ -1,0 +1,49 @@
+@page
+@model TimeSlotter.Pages.MyBookingsModel
+@{
+    ViewData["Title"] = "My bookings";
+    var uk = new System.Globalization.CultureInfo("uk-UA");
+}
+
+<div class="h-[calc(100vh-4rem)] overflow-y-auto bg-slate-950 px-4 py-8 text-slate-100 sm:px-6">
+    <div class="mx-auto max-w-3xl">
+        <h1 class="text-2xl font-bold text-white">My bookings</h1>
+        <p class="mt-2 text-sm text-slate-400">Appointments linked to your account.</p>
+        <div class="mt-6 flex flex-wrap gap-3">
+            <a asp-page="/Booking"
+               class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">Book a slot (public page)</a>
+            <a asp-page="/Admin"
+               class="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Provider dashboard</a>
+        </div>
+
+        @if (!Model.Bookings.Any())
+        {
+            <p class="mt-10 text-center text-sm text-slate-500">You have no bookings yet. Use the provider’s link or open the public booking page while signed in.</p>
+        }
+        else
+        {
+            <ul class="mt-8 space-y-3" role="list">
+                @foreach (var b in Model.Bookings)
+                {
+                    var slugQ = Uri.EscapeDataString(b.ProviderSlug.TrimStart('@'));
+                    var bookAgain = $"/Booking?slug={slugQ}&date={b.Start:yyyy-MM-dd}";
+                    <li class="rounded-xl border border-slate-700 bg-slate-900/80 p-4 ring-1 ring-white/5">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <p class="font-medium text-white">@b.ProviderName</p>
+                                <p class="mt-1 font-mono text-sm text-slate-300">
+                                    @b.Start.ToString("ddd d MMM yyyy, HH:mm", uk) – @b.End.ToString("HH:mm", uk)
+                                </p>
+                                <p class="mt-1 text-xs text-slate-500">@b.CustomerName · @b.CustomerPhone</p>
+                            </div>
+                            <span class="shrink-0 rounded-md border px-2 py-0.5 text-xs @(b.SlotStatus == TimeSlotter.Models.SlotStatus.BookedByClient ? "border-amber-500/40 text-amber-200" : "border-slate-600 text-slate-400")">
+                                @b.SlotStatus
+                            </span>
+                        </div>
+                        <a href="@bookAgain" class="mt-3 inline-block text-xs font-medium text-blue-400 hover:text-blue-300">Same provider, pick another date →</a>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>

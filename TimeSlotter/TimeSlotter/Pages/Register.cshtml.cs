@@ -10,11 +10,16 @@ public class RegisterModel : PageModel
 {
     private readonly UserManager<Provider> _userManager;
     private readonly SignInManager<Provider> _signInManager;
+    private readonly RoleManager<IdentityRole<int>> _roleManager;
 
-    public RegisterModel(UserManager<Provider> userManager, SignInManager<Provider> signInManager)
+    public RegisterModel(
+        UserManager<Provider> userManager,
+        SignInManager<Provider> signInManager,
+        RoleManager<IdentityRole<int>> roleManager)
     {
         _userManager = userManager;
         _signInManager = signInManager;
+        _roleManager = roleManager;
     }
 
     [BindProperty]
@@ -67,6 +72,11 @@ public class RegisterModel : PageModel
                 ModelState.AddModelError(string.Empty, error.Description);
 
             return Page();
+        }
+
+        if (await _roleManager.RoleExistsAsync("User"))
+        {
+            await _userManager.AddToRoleAsync(user, "User");
         }
 
         // High-UX: sign them in immediately.

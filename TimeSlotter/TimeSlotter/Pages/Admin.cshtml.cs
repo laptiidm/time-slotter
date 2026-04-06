@@ -41,6 +41,7 @@ public class AdminModel : PageModel
     public List<TimeSlot> ExistingSlots { get; set; } = new();
 
     /// <summary>yyyy-MM-dd for the schedule query and target date input.</summary>
+    [BindProperty(SupportsGet = true)]
     public string ScheduleInitialDate { get; set; } = "";
 
     /// <summary>Serialized payload: { "slots": [ ... ] } for first paint.</summary>
@@ -55,6 +56,22 @@ public class AdminModel : PageModel
     /// <summary>Slug or user name for <c>?slug=</c> on the public booking page.</summary>
     public string BookingLinkSlug { get; set; } = "";
 
+    public IReadOnlyList<CustomerPickVm> CustomersForAssign { get; set; } = Array.Empty<CustomerPickVm>();
+
+    public IReadOnlyList<AvailableSlotAssignVm> AvailableSlotsForAssign { get; set; } = Array.Empty<AvailableSlotAssignVm>();
+
+    [BindProperty]
+    public int AssignSlotId { get; set; }
+
+    [BindProperty]
+    public string AssignCustomerSelection { get; set; } = "walkin";
+
+    [BindProperty]
+    public string? AssignWalkInName { get; set; }
+
+    [BindProperty]
+    public string? AssignWalkInPhone { get; set; }
+
     public async Task<IActionResult> OnGetAsync(string? date)
     {
         var user = await _userManager.GetUserAsync(User);
@@ -63,18 +80,13 @@ public class AdminModel : PageModel
             return NotFound();
         }
 
-        Provider = user;
-        BookingLinkSlug = ResolveBookingLinkSlug(user);
         var day = DateOnly.FromDateTime(DateTime.Today);
         if (!string.IsNullOrWhiteSpace(date) && DateOnly.TryParse(date, out var parsed))
         {
             day = parsed;
         }
 
-        ScheduleInitialDate = day.ToString("yyyy-MM-dd");
-        ExistingSlots = await LoadSlotsForDayAsync(user.Id, day);
-        var list = ToSnapshotList(ExistingSlots, day);
-        InitialSlotsJson = JsonSerializer.Serialize(new { slots = list }, JsonWriteOptions);
+        await PrepareSchedulePageAsync(user, day);
 
         if (TempData.TryGetValue("GeneratedLink", out var genObj) && genObj is string genLink && !string.IsNullOrWhiteSpace(genLink))
         {
@@ -82,6 +94,127 @@ public class AdminModel : PageModel
         }
 
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostAssignBookingAsync()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var slot = await _context.Slots.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == AssignSlotId && s.ProviderId == user.Id);
+        var dayFallback = DateOnly.FromDateTime(DateTime.Today);
+        if (!DateOnly.TryParse(ScheduleInitialDate, out var dayFromField))
+        {
+            dayFromField = dayFallback;
+        }
+
+        var day = slot != null ? DateOnly.FromDateTime(slot.StartTime) : dayFromField;
+
+        if (AssignSlotId <= 0 || slot == null)
+        {
+            ModelState.AddModelError(string.Empty, "Select a valid slot.");
+        }
+        else if (slot.Status != SlotStatus.Available)
+        {
+            ModelState.AddModelError(string.Empty, "That slot is no longer available.");
+        }
+
+        string customerName = "";
+        string customerPhone = "";
+        int? customerId = null;
+
+        var sel = (AssignCustomerSelection ?? "walkin").Trim();
+        if (sel == "walkin" || string.IsNullOrEmpty(sel))
+        {
+            customerName = (AssignWalkInName ?? "").Trim();
+            customerPhone = (AssignWalkInPhone ?? "").Trim();
+            customerId = null;
+            if (string.IsNullOrEmpty(customerName) || string.IsNullOrEmpty(customerPhone))
+            {
+                ModelState.AddModelError(string.Empty, "Walk-in bookings need name and phone.");
+            }
+        }
+        else if (!int.TryParse(sel, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var cid))
+        {
+            ModelState.AddModelError(string.Empty, "Invalid customer selection.");
+        }
+        else
+        {
+            customerId = cid;
+            var cust = await _userManager.FindByIdAsync(cid.ToString());
+            if (cust == null)
+            {
+                ModelState.AddModelError(string.Empty, "Customer not found.");
+            }
+            else
+            {
+                customerName = (cust.Name ?? "").Trim();
+                customerPhone = (cust.PhoneNumber ?? "").Trim();
+                if (string.IsNullOrEmpty(customerName) || string.IsNullOrEmpty(customerPhone))
+                {
+                    ModelState.AddModelError(string.Empty, "Selected account must have name and phone, or choose walk-in.");
+                }
+            }
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await PrepareSchedulePageAsync(user, day);
+            return Page();
+        }
+
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        var updatedRows = await _context.Slots
+            .Where(s => s.Id == AssignSlotId && s.ProviderId == user.Id && s.Status == SlotStatus.Available)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.BookedByClient));
+        if (updatedRows == 0)
+        {
+            await tx.RollbackAsync();
+            ModelState.AddModelError(string.Empty, "Slot was just taken; refresh and try again.");
+            await PrepareSchedulePageAsync(user, day);
+            return Page();
+        }
+
+        _context.Bookings.Add(new Booking
+        {
+            SlotId = AssignSlotId,
+            CustomerId = customerId,
+            AssignedByProviderId = user.Id,
+            CustomerName = customerName,
+            CustomerPhone = customerPhone,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        return RedirectToPage(new { date = day.ToString("yyyy-MM-dd") });
+    }
+
+    private async Task PrepareSchedulePageAsync(Provider user, DateOnly day)
+    {
+        Provider = user;
+        BookingLinkSlug = ResolveBookingLinkSlug(user);
+        ScheduleInitialDate = day.ToString("yyyy-MM-dd");
+        ExistingSlots = await LoadSlotsForDayAsync(user.Id, day);
+        var list = ToSnapshotList(ExistingSlots, day);
+        InitialSlotsJson = JsonSerializer.Serialize(new { slots = list }, JsonWriteOptions);
+
+        CustomersForAssign = await _userManager.Users.AsNoTracking()
+            .Where(u => u.Id != user.Id)
+            .OrderBy(u => u.Name)
+            .Select(u => new CustomerPickVm(u.Id, $"{u.Name} · {u.Email ?? u.UserName ?? ""}"))
+            .ToListAsync();
+
+        AvailableSlotsForAssign = ExistingSlots
+            .Where(s => s.Status == SlotStatus.Available)
+            .Select(s => new AvailableSlotAssignVm(
+                s.Id,
+                $"{s.StartTime:HH:mm} – {s.EndTime:HH:mm}{(string.IsNullOrEmpty(s.ResourceContext) ? "" : $" · {s.ResourceContext}")}"))
+            .ToList();
     }
 
     /// <summary>JSON snapshot of persisted slots for a date (polling / refresh).</summary>
@@ -206,8 +339,13 @@ public class AdminModel : PageModel
         catch (JsonException)
         {
             ModelState.AddModelError(string.Empty, "Invalid slot data.");
-            Provider = user;
-            BookingLinkSlug = ResolveBookingLinkSlug(user);
+            var day = DateOnly.FromDateTime(DateTime.Today);
+            if (DateOnly.TryParse(ScheduleInitialDate, out var pd))
+            {
+                day = pd;
+            }
+
+            await PrepareSchedulePageAsync(user, day);
             return Page();
         }
 
@@ -371,4 +509,8 @@ public class AdminModel : PageModel
         public string Date { get; set; } = string.Empty;
         public string? ResourceContext { get; set; }
     }
+
+    public sealed record CustomerPickVm(int Id, string Display);
+
+    public sealed record AvailableSlotAssignVm(int SlotId, string Label);
 }

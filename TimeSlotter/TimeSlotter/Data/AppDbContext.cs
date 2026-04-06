@@ -34,5 +34,19 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
         modelBuilder.Entity<Provider>()
             .HasIndex(p => p.Slug)
             .IsUnique();
+
+        modelBuilder.Entity<Booking>(b =>
+        {
+            // SQL Server: two FKs to Providers would create multiple cascade paths with SetNull.
+            b.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            b.HasOne(x => x.AssignedByProvider)
+                .WithMany()
+                .HasForeignKey(x => x.AssignedByProviderId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
     }
 }

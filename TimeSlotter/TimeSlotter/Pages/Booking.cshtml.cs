@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -19,10 +20,12 @@ public class BookingModel : PageModel
     };
 
     private readonly AppDbContext _context;
+    private readonly UserManager<Provider> _userManager;
 
-    public BookingModel(AppDbContext context)
+    public BookingModel(AppDbContext context, UserManager<Provider> userManager)
     {
         _context = context;
+        _userManager = userManager;
     }
 
     public Provider? Provider { get; set; }
@@ -31,6 +34,18 @@ public class BookingModel : PageModel
     public string DateYmd { get; set; } = "";
     /// <summary>Raw slug from route (for building URLs).</summary>
     public string SlugRoute { get; set; } = "";
+
+    /// <summary>True when the signed-in user is in the <c>Admin</c> role (site-wide).</summary>
+    public bool IsSiteAdmin { get; set; }
+
+    /// <summary>Slots on this day that are <see cref="SlotStatus.Available"/> (public bookable count).</summary>
+    public int PublicAvailableSlotCount { get; set; }
+
+    /// <summary>When signed in, booking can link to this account (<see cref="OnPostBookAsync"/> sets <see cref="Booking.CustomerId"/>).</summary>
+    public bool IsAuthenticatedBooker { get; set; }
+
+    public string? PrefillCustomerName { get; set; }
+    public string? PrefillCustomerPhone { get; set; }
 
     public async Task<IActionResult> OnGetAsync(string? slug, DateTime? date)
     {
@@ -68,7 +83,66 @@ public class BookingModel : PageModel
             .OrderBy(s => s.StartTime)
             .ToListAsync();
 
+        IsSiteAdmin = User.Identity?.IsAuthenticated == true && User.IsInRole("Admin");
+        PublicAvailableSlotCount = DaySlots.Count(s => s.Status == SlotStatus.Available);
+
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var me = await _userManager.GetUserAsync(User);
+            if (me != null)
+            {
+                IsAuthenticatedBooker = true;
+                PrefillCustomerName = me.Name;
+                PrefillCustomerPhone = me.PhoneNumber ?? string.Empty;
+            }
+        }
+
         return Page();
+    }
+
+    public async Task<IActionResult> OnGetSlotStatusesAsync(string? slug, string? date)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            slug = Request.Query["slug"].FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            return new JsonResult(new { error = "Invalid provider." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var normalizedSlug = slug.TrimStart('@');
+        normalizedSlug = string.IsNullOrEmpty(normalizedSlug) ? slug : "@" + normalizedSlug;
+
+        var provider = await _context.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
+        if (provider == null)
+        {
+            return new JsonResult(new { error = "Provider not found." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (string.IsNullOrWhiteSpace(date))
+        {
+            date = Request.Query["date"].FirstOrDefault();
+        }
+
+        if (!DateTime.TryParse(date, out var dayParsed))
+        {
+            dayParsed = DateTime.Today;
+        }
+
+        var dayStart = DateTime.SpecifyKind(dayParsed.Date, DateTimeKind.Unspecified);
+        var dayEndExclusive = dayStart.AddDays(1);
+
+        var slots = await _context.Slots
+            .AsNoTracking()
+            .Where(s => s.ProviderId == provider.Id && s.StartTime >= dayStart && s.StartTime < dayEndExclusive)
+            .OrderBy(s => s.StartTime)
+            .Select(s => new { id = s.Id, status = SlotStatusApiToken(s.Status) })
+            .ToListAsync();
+
+        return new JsonResult(new { slots }, JsonWriteOptions);
     }
 
     public async Task<IActionResult> OnPostBookAsync(string? slug, int slotId, string? name, string? phone)
@@ -80,38 +154,73 @@ public class BookingModel : PageModel
 
         name = (name ?? string.Empty).Trim();
         phone = (phone ?? string.Empty).Trim();
+
+        int? customerId = null;
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var me = await _userManager.GetUserAsync(User);
+            customerId = me?.Id;
+            if (me != null)
+            {
+                if (string.IsNullOrEmpty(name))
+                {
+                    name = me.Name?.Trim() ?? string.Empty;
+                }
+
+                if (string.IsNullOrEmpty(phone))
+                {
+                    phone = me.PhoneNumber?.Trim() ?? string.Empty;
+                }
+            }
+        }
+
         if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(phone))
         {
-            return new JsonResult(new { success = false, error = "Вкажіть ім'я та телефон." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { success = false, error = "Вкажіть ім'я та телефон (або заповніть їх у профілі)." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         var normalizedSlug = slug.TrimStart('@');
         normalizedSlug = string.IsNullOrEmpty(normalizedSlug) ? slug : "@" + normalizedSlug;
 
-        var provider = await _context.Users.FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
+        var provider = await _context.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
         if (provider == null)
         {
             return new JsonResult(new { success = false, error = "Provider not found." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         await using var tx = await _context.Database.BeginTransactionAsync();
-        var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == provider.Id);
-        if (slot == null)
+
+        var slotExists = await _context.Slots.AnyAsync(s => s.Id == slotId && s.ProviderId == provider.Id);
+        if (!slotExists)
         {
             await tx.RollbackAsync();
             return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
-        if (slot.Status != SlotStatus.Available)
+        var updatedRows = await _context.Slots
+            .Where(s => s.Id == slotId && s.ProviderId == provider.Id && s.Status == SlotStatus.Available)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.BookedByClient));
+
+        if (updatedRows == 0)
         {
             await tx.RollbackAsync();
-            return new JsonResult(new { success = false, error = "Цей слот уже зайнято." }, JsonWriteOptions) { StatusCode = 409 };
+            return new JsonResult(new
+            {
+                message = "Slot already booked",
+                success = false,
+                error = "This slot was just taken. Please choose another time.",
+            }, JsonWriteOptions)
+            {
+                StatusCode = StatusCodes.Status409Conflict,
+            };
         }
 
-        slot.Status = SlotStatus.BookedByClient;
         _context.Bookings.Add(new Booking
         {
-            SlotId = slot.Id,
+            SlotId = slotId,
+            CustomerId = customerId,
+            AssignedByProviderId = null,
             CustomerName = name,
             CustomerPhone = phone,
             CreatedAt = DateTime.UtcNow,
@@ -121,4 +230,13 @@ public class BookingModel : PageModel
 
         return new JsonResult(new { success = true }, JsonWriteOptions);
     }
+
+    private static string SlotStatusApiToken(SlotStatus status) =>
+        status switch
+        {
+            SlotStatus.Available => "available",
+            SlotStatus.BookedByClient => "booked",
+            SlotStatus.ReservedByAdmin => "reserved",
+            _ => "reserved",
+        };
 }

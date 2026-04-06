@@ -21,6 +21,16 @@
         scrollbar-width: thin;
         scrollbar-color: #3b82f6 rgba(30, 41, 59, 0.5);
     }
+    .slot-card-reserved-stripe {
+        background-color: rgba(15, 23, 42, 0.92);
+        background-image: repeating-linear-gradient(
+            -36deg,
+            rgba(51, 65, 85, 0.42) 0px,
+            rgba(51, 65, 85, 0.42) 9px,
+            rgba(30, 41, 59, 0.5) 9px,
+            rgba(30, 41, 59, 0.5) 18px
+        );
+    }
 </style>
 
 <form id="bookingCsrfForm" class="sr-only" aria-hidden="true">@Html.AntiForgeryToken()</form>
@@ -49,53 +59,128 @@
                         Показати
                     </button>
                 </div>
+                @if (Model.DaySlots.Any())
+                {
+                    <p class="mt-3 text-sm text-slate-400">
+                        Відкрито для запису: <span class="font-semibold tabular-nums text-blue-200">@Model.PublicAvailableSlotCount</span>
+                        з <span class="tabular-nums text-slate-300">@Model.DaySlots.Count</span>
+                        <span class="text-slate-500">(слоти зі статусом «доступно»)</span>
+                    </p>
+                }
+                @if (Model.IsAuthenticatedBooker)
+                {
+                    <p class="mx-auto mt-3 max-w-4xl text-sm text-blue-200/90 sm:mx-0">Ви увійшли в систему — бронювання буде прив’язано до вашого облікового запису (<span class="font-mono text-xs">CustomerId</span>).</p>
+                }
             </header>
 
             @if (Model.DaySlots.Any())
             {
                 <div class="relative">
                     <div id="bookingSlotsScroll" class="custom-scrollbar max-h-[70vh] overflow-y-auto overflow-x-hidden pr-2 md:max-h-[min(60vh,500px)]">
-                        <div class="grid grid-cols-1 gap-4 pb-1 sm:grid-cols-2" id="slotGrid" data-slug="@Model.SlugRoute">
+                        <div class="grid grid-cols-1 gap-4 pb-1 sm:grid-cols-2" id="slotGrid" data-slug="@Model.SlugRoute" data-is-site-admin="@(Model.IsSiteAdmin ? "true" : "false")" data-admin-slot-api="@Url.Page("/Index")" data-prefill-name="@(Model.PrefillCustomerName ?? "")" data-prefill-phone="@(Model.PrefillCustomerPhone ?? "")">
                             @foreach (var slot in Model.DaySlots)
                             {
                                 var isAvailable = slot.Status == TimeSlotter.Models.SlotStatus.Available;
-                                <article class="slot-card rounded-xl p-4 ring-1 ring-inset transition-shadow @(isAvailable ? "border border-blue-500 bg-slate-950/50 ring-blue-500/25" : "border border-slate-700 bg-slate-800/80 text-slate-500 ring-slate-700/50")"
-                                         data-slot-id="@slot.Id">
-                                    <div class="mb-3 font-mono text-base @(isAvailable ? "font-medium text-white" : "text-slate-400")">
+                                var isBooked = slot.Status == TimeSlotter.Models.SlotStatus.BookedByClient;
+                                var isReserved = slot.Status == TimeSlotter.Models.SlotStatus.ReservedByAdmin;
+                                var statusApi = isAvailable ? "available" : isBooked ? "booked" : "reserved";
+                                var cardClass = isAvailable
+                                    ? "slot-card rounded-xl border border-blue-500 bg-slate-950/50 p-4 ring-1 ring-inset ring-blue-500/25 transition-shadow"
+                                    : isBooked
+                                        ? "slot-card rounded-xl border border-amber-500/50 bg-amber-950/25 p-4 text-amber-50 ring-1 ring-inset ring-amber-500/25 transition-shadow"
+                                        : "slot-card slot-card-reserved-stripe rounded-xl border border-slate-600/70 p-4 text-slate-400 ring-1 ring-inset ring-slate-600/45 transition-shadow";
+                                <article class="@cardClass" data-slot-id="@slot.Id" data-status="@statusApi">
+                                    <div class="slot-time-block mb-3 font-mono text-base @(isAvailable ? "font-medium text-white" : isBooked ? "font-medium text-amber-100" : "text-slate-300")">
                                         @slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")
                                         @if (!string.IsNullOrEmpty(slot.ResourceContext))
                                         {
-                                            <span class="mt-1 block font-sans text-sm font-normal @(isAvailable ? "text-slate-400" : "text-slate-500")">@slot.ResourceContext</span>
+                                            <span class="slot-resource mt-1 block font-sans text-sm font-normal @(isAvailable ? "text-slate-400" : isBooked ? "text-amber-200/80" : "text-slate-500")">@slot.ResourceContext</span>
                                         }
                                     </div>
-                                    @if (isAvailable)
-                                    {
-                                        <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">
-                                            Забронювати
-                                        </button>
-                                        <div class="book-form mt-3 hidden flex-col gap-2 border-t border-slate-700/80 pt-3">
-                                            <input type="text" name="name" class="slot-name rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name"/>
-                                            <input type="tel" name="phone" class="slot-phone rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel"/>
-                                            <button type="button" class="book-btn rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">
-                                                Підтвердити бронювання
+                                    <div class="slot-actions">
+                                        @if (isAvailable)
+                                        {
+                                            @if (Model.IsSiteAdmin)
+                                            {
+                                                <div class="mb-2 flex justify-end">
+                                                    <button type="button" class="admin-reserve-slot-btn shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/25 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/40" title="Admin Reserve">🔒 Reserve</button>
+                                                </div>
+                                            }
+                                            <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">
+                                                Забронювати
                                             </button>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="flex items-center justify-between gap-2">
-                                            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Зайнято</span>
-                                            <button type="button" disabled class="cursor-not-allowed rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-xs text-slate-600">
-                                                Зайнято
-                                            </button>
-                                        </div>
-                                    }
+                                            <div class="book-form mt-3 hidden flex-col gap-2 border-t border-slate-700/80 pt-3">
+                                                <input type="text" name="name" class="slot-name rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
+                                                <input type="tel" name="phone" class="slot-phone rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
+                                                <button type="button" class="book-btn rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">
+                                                    Підтвердити бронювання
+                                                </button>
+                                            </div>
+                                        }
+                                        else if (isBooked)
+                                        {
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Booked</span>
+                                                <button type="button" disabled class="cursor-not-allowed rounded-lg border border-amber-600/40 bg-amber-950/50 px-3 py-2 text-xs text-amber-300/50">Booked</button>
+                                            </div>
+                                        }
+                                        else if (Model.IsSiteAdmin && isReserved)
+                                        {
+                                            <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Reserved</p>
+                                            <p class="mb-2 text-xs text-slate-500">Admin Reserve</p>
+                                            <button type="button" class="admin-release-slot-btn w-full rounded-lg border border-emerald-500/50 bg-emerald-600/20 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-600/35">Release</button>
+                                        }
+                                        else
+                                        {
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Unavailable</span>
+                                                <button type="button" disabled class="cursor-not-allowed rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-xs text-slate-600">Unavailable</button>
+                                            </div>
+                                        }
+                                    </div>
                                 </article>
                             }
                         </div>
                     </div>
                     <div id="bookingSlotsScrollFade" class="pointer-events-none absolute bottom-0 left-0 right-2 h-10 rounded-b-lg bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent transition-opacity duration-200" aria-hidden="true"></div>
                 </div>
+
+                <template id="tmpl-slot-actions-available">
+                    <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">Забронювати</button>
+                    <div class="book-form mt-3 hidden flex-col gap-2 border-t border-slate-700/80 pt-3">
+                        <input type="text" name="name" class="slot-name rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
+                        <input type="tel" name="phone" class="slot-phone rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
+                        <button type="button" class="book-btn rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити бронювання</button>
+                    </div>
+                </template>
+                <template id="tmpl-slot-actions-available-admin">
+                    <div class="mb-2 flex justify-end">
+                        <button type="button" class="admin-reserve-slot-btn shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/25 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/40" title="Admin Reserve">🔒 Reserve</button>
+                    </div>
+                    <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">Забронювати</button>
+                    <div class="book-form mt-3 hidden flex-col gap-2 border-t border-slate-700/80 pt-3">
+                        <input type="text" name="name" class="slot-name rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
+                        <input type="tel" name="phone" class="slot-phone rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
+                        <button type="button" class="book-btn rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити бронювання</button>
+                    </div>
+                </template>
+                <template id="tmpl-slot-actions-booked">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Booked</span>
+                        <button type="button" disabled class="cursor-not-allowed rounded-lg border border-amber-600/40 bg-amber-950/50 px-3 py-2 text-xs text-amber-300/50">Booked</button>
+                    </div>
+                </template>
+                <template id="tmpl-slot-actions-reserved">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Unavailable</span>
+                        <button type="button" disabled class="cursor-not-allowed rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-xs text-slate-600">Unavailable</button>
+                    </div>
+                </template>
+                <template id="tmpl-slot-actions-reserved-admin">
+                    <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Reserved</p>
+                    <p class="mb-2 text-xs text-slate-500">Admin Reserve</p>
+                    <button type="button" class="admin-release-slot-btn w-full rounded-lg border border-emerald-500/50 bg-emerald-600/20 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-600/35">Release</button>
+                </template>
             }
             else
             {
@@ -104,6 +189,8 @@
         </div>
     }
 </div>
+
+<div id="bookingToast" class="pointer-events-none fixed bottom-6 left-1/2 z-[110] hidden max-w-[min(100%-2rem,24rem)] -translate-x-1/2 rounded-xl border border-amber-500/40 bg-slate-900/95 px-4 py-3 text-center text-sm leading-snug text-amber-50 shadow-xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-sm" role="status" aria-live="polite"></div>
 
 <div id="bookingSuccessModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]" aria-hidden="true" role="dialog">
     <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-xl ring-1 ring-white/10">
@@ -127,6 +214,9 @@
                 var successClose = document.getElementById('bookingSuccessClose');
                 var slotsScroll = document.getElementById('bookingSlotsScroll');
                 var slotsScrollFade = document.getElementById('bookingSlotsScrollFade');
+                var bookingToast = document.getElementById('bookingToast');
+                var statusPollTimer = null;
+                var toastHideTimer = null;
 
                 function updateSlotsScrollFade() {
                     if (!slotsScroll || !slotsScrollFade) return;
@@ -139,6 +229,17 @@
                 window.addEventListener('resize', updateSlotsScrollFade);
                 updateSlotsScrollFade();
 
+                function showBookingToast(msg) {
+                    if (!bookingToast) return;
+                    bookingToast.textContent = msg || '';
+                    bookingToast.classList.remove('hidden');
+                    window.clearTimeout(toastHideTimer);
+                    toastHideTimer = window.setTimeout(function () {
+                        bookingToast.classList.add('hidden');
+                        bookingToast.textContent = '';
+                    }, 4500);
+                }
+
                 function getToken() {
                     var el = csrfForm && csrfForm.querySelector('input[name="__RequestVerificationToken"]');
                     return el ? el.value : '';
@@ -146,6 +247,102 @@
 
                 function bookingPageUrl(dateVal) {
                     return window.location.origin + '/Booking?slug=' + encodeURIComponent(slug) + '&date=' + encodeURIComponent(dateVal);
+                }
+
+                function slotStatusesUrl() {
+                    var u = new URL(window.location.href);
+                    u.search = '';
+                    u.searchParams.set('handler', 'SlotStatuses');
+                    u.searchParams.set('slug', slug);
+                    u.searchParams.set('date', (dateInput && dateInput.value) || '');
+                    return u.toString();
+                }
+
+                function mountTemplateInto(el, templateId) {
+                    var tpl = document.getElementById(templateId);
+                    if (!el || !tpl || !tpl.content) return;
+                    el.textContent = '';
+                    var cloned = tpl.content.cloneNode(true);
+                    while (cloned.firstChild) el.appendChild(cloned.firstChild);
+                }
+
+                function applyPrefillToCardActions(card) {
+                    if (!grid || !card) return;
+                    var pn = grid.getAttribute('data-prefill-name') || '';
+                    var pp = grid.getAttribute('data-prefill-phone') || '';
+                    var ni = card.querySelector('.slot-name');
+                    var pi = card.querySelector('.slot-phone');
+                    if (ni && pn) ni.value = pn;
+                    if (pi && pp) pi.value = pp;
+                }
+
+                function isSiteAdminGrid() {
+                    return grid && grid.getAttribute('data-is-site-admin') === 'true';
+                }
+
+                function applyCardStatus(card, status) {
+                    if (!card) return;
+                    var prev = card.getAttribute('data-status');
+                    if (prev === status) return;
+
+                    var timeBlock = card.querySelector('.slot-time-block');
+                    var resource = card.querySelector('.slot-resource');
+                    var actions = card.querySelector('.slot-actions');
+                    if (!actions) return;
+
+                    if (status === 'available') {
+                        card.className = 'slot-card rounded-xl border border-blue-500 bg-slate-950/50 p-4 ring-1 ring-inset ring-blue-500/25 transition-shadow';
+                        if (timeBlock) {
+                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base font-medium text-white';
+                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-slate-400';
+                        }
+                        mountTemplateInto(actions, isSiteAdminGrid() ? 'tmpl-slot-actions-available-admin' : 'tmpl-slot-actions-available');
+                        applyPrefillToCardActions(card);
+                    } else if (status === 'booked') {
+                        card.className = 'slot-card rounded-xl border border-amber-500/50 bg-amber-950/25 p-4 text-amber-50 ring-1 ring-inset ring-amber-500/25 transition-shadow';
+                        if (timeBlock) {
+                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base font-medium text-amber-100';
+                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-amber-200/80';
+                        }
+                        mountTemplateInto(actions, 'tmpl-slot-actions-booked');
+                    } else {
+                        card.className = 'slot-card slot-card-reserved-stripe rounded-xl border border-slate-600/70 p-4 text-slate-400 ring-1 ring-inset ring-slate-600/45 transition-shadow';
+                        if (timeBlock) {
+                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base text-slate-300';
+                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-slate-500';
+                        }
+                        mountTemplateInto(actions, isSiteAdminGrid() ? 'tmpl-slot-actions-reserved-admin' : 'tmpl-slot-actions-reserved');
+                    }
+                    card.setAttribute('data-status', status);
+                }
+
+                function applySlotStatuses(slots) {
+                    if (!grid || !slots) return;
+                    var map = {};
+                    slots.forEach(function (s) {
+                        var sid = s.id;
+                        var id = typeof sid === 'string' ? parseInt(sid, 10) : sid;
+                        map[id] = s.status;
+                    });
+                    grid.querySelectorAll('.slot-card').forEach(function (card) {
+                        var id = parseInt(card.getAttribute('data-slot-id'), 10);
+                        if (map[id]) applyCardStatus(card, map[id]);
+                    });
+                    updateSlotsScrollFade();
+                }
+
+                async function fetchSlotStatuses() {
+                    if (!grid || !slug) return;
+                    try {
+                        var res = await fetch(slotStatusesUrl(), {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (!res.ok) return;
+                        var data = await res.json();
+                        if (data && data.slots) applySlotStatuses(data.slots);
+                    } catch (e) { /* ignore poll errors */ }
                 }
 
                 dateGo?.addEventListener('click', function () {
@@ -174,10 +371,72 @@
                     if (e.target === successModal) closeSuccess();
                 });
 
-                grid?.querySelectorAll('.slot-card').forEach(function (card) {
-                    var toggleBtn = card.querySelector('.toggle-book-btn');
-                    var form = card.querySelector('.book-form');
-                    toggleBtn?.addEventListener('click', function () {
+                async function postAdminSlotHandler(handlerName, slotId) {
+                    var baseUrl = (grid && grid.getAttribute('data-admin-slot-api')) || '';
+                    if (!baseUrl) baseUrl = window.location.origin + '/Index';
+                    var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+                    var body = new URLSearchParams();
+                    body.set('slotId', String(slotId));
+                    body.set('__RequestVerificationToken', getToken());
+                    var res = await fetch(baseUrl + sep + 'handler=' + encodeURIComponent(handlerName), {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (x) { }
+                    return { res: res, data: data };
+                }
+
+                grid?.addEventListener('click', function (e) {
+                    var toggleBtn = e.target && e.target.closest && e.target.closest('.toggle-book-btn');
+                    var bookBtn = e.target && e.target.closest && e.target.closest('.book-btn');
+                    var reserveAdminBtn = e.target && e.target.closest && e.target.closest('.admin-reserve-slot-btn');
+                    var releaseAdminBtn = e.target && e.target.closest && e.target.closest('.admin-release-slot-btn');
+                    var card = e.target.closest('.slot-card');
+                    if (!card || !grid) return;
+
+                    if (reserveAdminBtn) {
+                        (async function () {
+                            if (!confirm('Reserve this slot? It will block public booking (Admin Reserve).')) return;
+                            var id = parseInt(card.getAttribute('data-slot-id'), 10);
+                            try {
+                                var out = await postAdminSlotHandler('ReserveSlot', id);
+                                if (!out.res.ok || !out.data.success) {
+                                    showBookingToast(out.data.error || 'Could not reserve slot.');
+                                    await fetchSlotStatuses();
+                                    return;
+                                }
+                                await fetchSlotStatuses();
+                            } catch (err) {
+                                showBookingToast('Network error.');
+                            }
+                        })();
+                        return;
+                    }
+
+                    if (releaseAdminBtn) {
+                        (async function () {
+                            if (!confirm('Release this slot for public booking?')) return;
+                            var id = parseInt(card.getAttribute('data-slot-id'), 10);
+                            try {
+                                var out = await postAdminSlotHandler('ReleaseSlot', id);
+                                if (!out.res.ok || !out.data.success) {
+                                    showBookingToast(out.data.error || 'Could not release slot.');
+                                    await fetchSlotStatuses();
+                                    return;
+                                }
+                                await fetchSlotStatuses();
+                            } catch (err) {
+                                showBookingToast('Network error.');
+                            }
+                        })();
+                        return;
+                    }
+
+                    if (toggleBtn) {
+                        var form = card.querySelector('.book-form');
                         if (!form) return;
                         var open = !form.classList.contains('hidden');
                         grid.querySelectorAll('.book-form').forEach(function (f) {
@@ -187,46 +446,62 @@
                         if (open) return;
                         form.classList.remove('hidden');
                         form.classList.add('flex');
-                    });
-                    var btn = card.querySelector('.book-btn');
-                    if (!btn) return;
-                    btn.addEventListener('click', async function () {
-                        var id = parseInt(card.getAttribute('data-slot-id'), 10);
-                        var nameIn = card.querySelector('.slot-name');
-                        var phoneIn = card.querySelector('.slot-phone');
-                        var nm = nameIn && nameIn.value.trim();
-                        var ph = phoneIn && phoneIn.value.trim();
-                        if (!nm || !ph) {
-                            alert("Вкажіть ім'я та телефон.");
-                            return;
-                        }
-                        btn.disabled = true;
-                        var body = new URLSearchParams();
-                        body.set('slotId', String(id));
-                        body.set('slug', slug);
-                        body.set('name', nm);
-                        body.set('phone', ph);
-                        body.set('__RequestVerificationToken', getToken());
-                        try {
-                            var res = await fetch('?handler=Book', {
-                                method: 'POST',
-                                headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-                                body: body.toString(),
-                                credentials: 'same-origin'
-                            });
-                            var data = {};
-                            try { data = await res.json(); } catch (x) { }
-                            if (!res.ok || !data.success) {
-                                btn.disabled = false;
-                                alert(data.error || 'Не вдалося забронювати.');
+                        return;
+                    }
+
+                    if (bookBtn) {
+                        (async function () {
+                            var btn = bookBtn;
+                            var id = parseInt(card.getAttribute('data-slot-id'), 10);
+                            var nameIn = card.querySelector('.slot-name');
+                            var phoneIn = card.querySelector('.slot-phone');
+                            var nm = nameIn && nameIn.value.trim();
+                            var ph = phoneIn && phoneIn.value.trim();
+                            if (!nm || !ph) {
+                                alert("Вкажіть ім'я та телефон.");
                                 return;
                             }
-                            openSuccess();
-                        } catch (e) {
-                            btn.disabled = false;
-                            alert('Помилка мережі.');
-                        }
-                    });
+                            btn.disabled = true;
+                            var body = new URLSearchParams();
+                            body.set('slotId', String(id));
+                            body.set('slug', slug);
+                            body.set('name', nm);
+                            body.set('phone', ph);
+                            body.set('__RequestVerificationToken', getToken());
+                            try {
+                                var res = await fetch('?handler=Book', {
+                                    method: 'POST',
+                                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                                    body: body.toString(),
+                                    credentials: 'same-origin'
+                                });
+                                var data = {};
+                                try { data = await res.json(); } catch (x) { }
+                                if (res.status === 409 || data.message === 'Slot already booked') {
+                                    showBookingToast(data.error || 'This slot was just taken. Please choose another time.');
+                                    await fetchSlotStatuses();
+                                    btn.disabled = false;
+                                    return;
+                                }
+                                if (!res.ok || !data.success) {
+                                    btn.disabled = false;
+                                    alert(data.error || 'Не вдалося забронювати.');
+                                    return;
+                                }
+                                openSuccess();
+                            } catch (err) {
+                                btn.disabled = false;
+                                alert('Помилка мережі.');
+                            }
+                        })();
+                    }
+                });
+
+                if (statusPollTimer) window.clearInterval(statusPollTimer);
+                statusPollTimer = window.setInterval(fetchSlotStatuses, 30000);
+                fetchSlotStatuses();
+                window.addEventListener('beforeunload', function () {
+                    if (statusPollTimer) window.clearInterval(statusPollTimer);
                 });
             })();
         </script>

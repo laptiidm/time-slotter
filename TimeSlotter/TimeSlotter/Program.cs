@@ -1,7 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
-using TimeSlotter.Models;
+using Microsoft.EntityFrameworkCore;
 using TimeSlotter.Data;
+using TimeSlotter.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,5 +62,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
+
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
+    foreach (var roleName in new[] { "Admin", "User" })
+    {
+        if (!await roleManager.RoleExistsAsync(roleName))
+        {
+            await roleManager.CreateAsync(new IdentityRole<int>(roleName));
+        }
+    }
+}
 
 app.Run();

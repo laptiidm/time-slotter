@@ -2,6 +2,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TimeSlotter.Models;
 
+/// <summary>
+/// Public availability is <see cref="SlotStatus.Available"/>.
+/// Admin technical blocks use <see cref="SlotStatus.ReservedByAdmin"/> (no <see cref="Booking"/> row).
+/// </summary>
 public class Slot
 {
     public int Id { get; set; }
