@@ -15,6 +15,9 @@ public class Slot
     public string? ResourceContext { get; set; }
     public SlotStatus Status { get; set; }
 
+    /// <summary>True when this block was produced by merging adjacent slots (eligible for split back to standard intervals).</summary>
+    public bool IsGrouped { get; set; }
+
     /// <summary>True when this slot is not open for public booking (<see cref="SlotStatus.Available"/>).</summary>
     [NotMapped]
     public bool IsBooked => Status != SlotStatus.Available;

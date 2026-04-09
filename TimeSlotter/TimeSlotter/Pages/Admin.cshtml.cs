@@ -57,6 +57,9 @@ public class AdminModel : PageModel
 
     public IReadOnlyList<AvailableSlotAssignVm> AvailableSlotsForAssign { get; set; } = Array.Empty<AvailableSlotAssignVm>();
 
+    /// <summary>Clamped minutes used when splitting merged slots (UI + server).</summary>
+    public int DefaultSlotIntervalMinutes { get; set; } = 30;
+
     [BindProperty]
     public int AssignSlotId { get; set; }
 
@@ -86,6 +89,26 @@ public class AdminModel : PageModel
         await PrepareSchedulePageAsync(user, day);
 
         return Page();
+    }
+
+    /// <summary>AJAX: persist provider default split interval (minutes).</summary>
+    public async Task<IActionResult> OnPostDefaultSlotIntervalAsync([FromForm] int minutes)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        var clamped = Math.Clamp(minutes, 5, 480);
+        user.DefaultSlotIntervalMinutes = clamped;
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            return new JsonResult(new { success = false, error = "Could not update settings." }, JsonWriteOptions) { StatusCode = 500 };
+        }
+
+        return new JsonResult(new { success = true, defaultSlotIntervalMinutes = clamped }, JsonWriteOptions);
     }
 
     /// <summary>Full-page assign booking form (walk-in or linked customer).</summary>
@@ -258,6 +281,7 @@ public class AdminModel : PageModel
     private async Task PrepareSchedulePageAsync(Provider user, DateOnly day)
     {
         Provider = user;
+        DefaultSlotIntervalMinutes = Math.Clamp(user.DefaultSlotIntervalMinutes <= 0 ? 30 : user.DefaultSlotIntervalMinutes, 5, 480);
         BookingLinkSlug = ResolveBookingLinkSlug(user);
         ScheduleInitialDate = day.ToString("yyyy-MM-dd");
         ExistingSlots = await LoadSlotsForDayAsync(user.Id, day);
@@ -354,6 +378,187 @@ public class AdminModel : PageModel
         return new JsonResult(new { success = true }, JsonWriteOptions);
     }
 
+    /// <summary>Merge consecutive available slots into one block (same day, same resource).</summary>
+    public async Task<IActionResult> OnPostMergeSlotsAsync([FromForm] List<int>? slotIds)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        if (slotIds is null || slotIds.Count < 2)
+        {
+            return new JsonResult(new { success = false, error = "Оберіть щонайменше два слоти." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var distinct = slotIds.Distinct().ToList();
+        var entities = await _context.Slots
+            .Include(s => s.Bookings)
+            .Where(s => distinct.Contains(s.Id) && s.ProviderId == user.Id)
+            .ToListAsync();
+
+        if (entities.Count != distinct.Count)
+        {
+            return new JsonResult(new { success = false, error = "Один або кілька слотів не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (entities.Any(s => s.Status != SlotStatus.Available || s.Bookings.Count > 0))
+        {
+            return new JsonResult(new { success = false, error = "Можна об'єднувати лише вільні слоти без бронювань." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var day = DateOnly.FromDateTime(entities[0].StartTime);
+        if (entities.Any(s => DateOnly.FromDateTime(s.StartTime) != day))
+        {
+            return new JsonResult(new { success = false, error = "Усі слоти мають бути в один день." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var rcKey = entities[0].ResourceContext ?? string.Empty;
+        if (entities.Any(s => (s.ResourceContext ?? string.Empty) != rcKey))
+        {
+            return new JsonResult(new { success = false, error = "Слоти мають мати однаковий ресурс (контекст)." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var ordered = entities.OrderBy(s => s.StartTime).ToList();
+        for (var i = 0; i < ordered.Count - 1; i++)
+        {
+            if (ordered[i].EndTime != ordered[i + 1].StartTime)
+            {
+                return new JsonResult(new { success = false, error = "Слоти мають йти підряд без проміжків." }, JsonWriteOptions) { StatusCode = 400 };
+            }
+        }
+
+        var mergedStart = ordered[0].StartTime;
+        var mergedEnd = ordered[^1].EndTime;
+        var inheritedRc = string.IsNullOrWhiteSpace(ordered[0].ResourceContext)
+            ? null
+            : ordered[0].ResourceContext!.Trim();
+
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        _context.Slots.RemoveRange(ordered);
+        await _context.SaveChangesAsync();
+
+        var newSlot = new TimeSlot
+        {
+            ProviderId = user.Id,
+            StartTime = mergedStart,
+            EndTime = mergedEnd,
+            Status = SlotStatus.Available,
+            ResourceContext = inheritedRc,
+            IsGrouped = true,
+        };
+        _context.Slots.Add(newSlot);
+        await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        var refreshed = await LoadSlotsForDayAsync(user.Id, day);
+        var list = ToSnapshotList(refreshed, day);
+        return new JsonResult(new { success = true, slots = list }, JsonWriteOptions);
+    }
+
+    /// <summary>Split one merged (<see cref="Slot.IsGrouped"/>) available slot into segments of the provider default length.</summary>
+    public async Task<IActionResult> OnPostSplitSlotAsync(int slotId)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        var chunkMinutes = Math.Clamp(user.DefaultSlotIntervalMinutes <= 0 ? 30 : user.DefaultSlotIntervalMinutes, 5, 480);
+        const int minDurationMinutes = 5;
+
+        var slot = await _context.Slots
+            .Include(s => s.Bookings)
+            .FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == user.Id);
+
+        if (slot == null)
+        {
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (!slot.IsGrouped)
+        {
+            return new JsonResult(new { success = false, error = "Розбити можна лише згрупований слот (після об’єднання)." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        if (slot.Status != SlotStatus.Available || slot.Bookings.Count > 0)
+        {
+            return new JsonResult(new { success = false, error = "Можна розбивати лише вільні слоти." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var totalMinutes = (int)(slot.EndTime - slot.StartTime).TotalMinutes;
+        if (totalMinutes < minDurationMinutes)
+        {
+            return new JsonResult(new { success = false, error = "Слот занадто короткий." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var day = DateOnly.FromDateTime(slot.StartTime);
+        var newPieces = new List<TimeSlot>();
+        var cur = slot.StartTime;
+        var end = slot.EndTime;
+
+        while (cur < end)
+        {
+            var next = cur.AddMinutes(chunkMinutes);
+            if (next > end)
+            {
+                next = end;
+            }
+
+            var len = (int)(next - cur).TotalMinutes;
+            if (len < minDurationMinutes && newPieces.Count > 0)
+            {
+                newPieces[^1].EndTime = end;
+                break;
+            }
+
+            if (len >= minDurationMinutes)
+            {
+                newPieces.Add(new TimeSlot
+                {
+                    ProviderId = user.Id,
+                    StartTime = cur,
+                    EndTime = next,
+                    Status = SlotStatus.Available,
+                    ResourceContext = string.IsNullOrWhiteSpace(slot.ResourceContext) ? null : slot.ResourceContext.Trim(),
+                    IsGrouped = false,
+                });
+                cur = next;
+            }
+            else
+            {
+                newPieces.Add(new TimeSlot
+                {
+                    ProviderId = user.Id,
+                    StartTime = cur,
+                    EndTime = end,
+                    Status = SlotStatus.Available,
+                    ResourceContext = string.IsNullOrWhiteSpace(slot.ResourceContext) ? null : slot.ResourceContext.Trim(),
+                    IsGrouped = false,
+                });
+                break;
+            }
+        }
+
+        if (newPieces.Count == 0)
+        {
+            return new JsonResult(new { success = false, error = "Не вдалося розбити слот." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        _context.Slots.Remove(slot);
+        await _context.SaveChangesAsync();
+        _context.Slots.AddRange(newPieces);
+        await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        var refreshed = await LoadSlotsForDayAsync(user.Id, day);
+        var list = ToSnapshotList(refreshed, day);
+        return new JsonResult(new { success = true, slots = list }, JsonWriteOptions);
+    }
+
     /// <summary>Remove all persisted slots for the given calendar day (provider-scoped).</summary>
     public async Task<JsonResult> OnPostClearDayAsync(DateTime date)
     {
@@ -441,6 +646,7 @@ public class AdminModel : PageModel
                 EndTime = end,
                 Status = SlotStatus.Available,
                 ResourceContext = string.IsNullOrWhiteSpace(item.ResourceContext) ? null : item.ResourceContext.Trim(),
+                IsGrouped = false,
             });
         }
 
@@ -523,7 +729,8 @@ public class AdminModel : PageModel
             (int)s.Status,
             s.Status.ToString(),
             b?.CustomerName,
-            b?.CustomerPhone);
+            b?.CustomerPhone,
+            s.IsGrouped);
     }
 
     private static bool TryParseHm(string value, out int totalMinutes)
@@ -555,7 +762,8 @@ public class AdminModel : PageModel
         int StatusCode,
         string Status,
         string? ClientName,
-        string? ClientPhone);
+        string? ClientPhone,
+        bool IsGrouped);
 
     private sealed class SlotDraftJson
     {

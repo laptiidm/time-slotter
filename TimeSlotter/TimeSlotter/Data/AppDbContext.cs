@@ -19,9 +19,6 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
     {
         base.OnModelCreating(modelBuilder);
 
-        // Single-table strategy: Identity user store uses the Providers table name.
-        modelBuilder.Entity<Provider>().ToTable("Providers");
-
         modelBuilder.Entity<Slot>(slot =>
         {
             slot.Property(s => s.ResourceContext)
@@ -29,11 +26,20 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
 
             slot.Property(s => s.Status)
                 .HasConversion<int>();
+
+            slot.Property(s => s.IsGrouped)
+                .HasDefaultValue(false);
         });
 
-        modelBuilder.Entity<Provider>()
-            .HasIndex(p => p.Slug)
-            .IsUnique();
+        // Single-table strategy: Identity user store uses the Providers table name.
+        modelBuilder.Entity<Provider>(entity =>
+        {
+            entity.ToTable("Providers");
+            entity.Property(x => x.DefaultSlotIntervalMinutes)
+                .HasDefaultValue(30);
+            entity.HasIndex(p => p.Slug)
+                .IsUnique();
+        });
 
         modelBuilder.Entity<Booking>(b =>
         {

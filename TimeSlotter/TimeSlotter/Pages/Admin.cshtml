@@ -12,7 +12,7 @@
 <form id="adminCsrfForm" class="sr-only" aria-hidden="true">@Html.AntiForgeryToken()</form>
 <script type="application/json" id="initialExistingSlots">@Html.Raw(Model.InitialSlotsJson)</script>
 
-<div class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
+<div id="adminPageRoot" class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6" data-default-split-minutes="@Model.DefaultSlotIntervalMinutes">
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
         <aside class="flex min-h-0 flex-col lg:h-full">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
@@ -53,6 +53,19 @@
                                        class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
                             </div>
                             <p class="text-xs text-slate-500" id="strategyHelp">Each slot will be this many minutes long, placed back-to-back from start until end.</p>
+
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 ring-1 ring-inset ring-slate-800/60">
+                                <label for="defaultSplitIntervalInput" class="mb-1 block text-xs text-slate-500">Розбиття згрупованих слотів (хв)</label>
+                                <div class="flex flex-wrap items-stretch gap-2">
+                                    <input id="defaultSplitIntervalInput" type="number" min="5" max="480" value="@Model.DefaultSlotIntervalMinutes"
+                                           class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:leading-6"/>
+                                    <button type="button" id="saveDefaultSplitIntervalBtn"
+                                            class="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-600/20 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/35">
+                                        Зберегти
+                                    </button>
+                                </div>
+                                <p class="mt-1.5 text-[11px] leading-snug text-slate-600">Використовується при «Розгрупувати» для об’єднаних слотів.</p>
+                            </div>
 
                             <button type="button" id="generatePreviewBtn"
                                     class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
@@ -132,8 +145,8 @@
             </div>
         </aside>
 
-        <section class="flex min-h-0 flex-1 flex-col lg:min-h-0 lg:h-full" aria-label="Schedule timeline">
-            <div class="flex min-h-0 min-h-[min(100%,calc(100vh-5rem))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5">
+        <section id="adminTimelineSection" class="flex min-h-0 flex-1 flex-col lg:min-h-0 lg:h-full transition-[box-shadow] duration-300" aria-label="Schedule timeline">
+            <div id="adminTimelinePanel" class="flex min-h-0 min-h-[min(100%,calc(100vh-5rem))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5 transition-[box-shadow,ring-color] duration-300">
                 <div id="adminPermanentBookingCard" class="mb-4 shrink-0 rounded-xl border border-slate-700 bg-slate-800/50 p-4 ring-1 ring-white/5" data-booking-slug="@Model.BookingLinkSlug">
                     <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Посилання для бронювання</h3>
                     <p class="mt-1 text-[11px] leading-snug text-slate-500">Публічне посилання для обраної дати (як у полі Target date). Оновлюється автоматично.</p>
@@ -165,6 +178,10 @@
                                 class="rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500">
                             Clear draft
                         </button>
+                        <button type="button" id="adminGroupingToggleBtn"
+                                class="rounded-lg border border-indigo-500/40 bg-indigo-950/40 px-3 py-1.5 text-xs font-medium text-indigo-200 transition hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+                            Групувати
+                        </button>
                     </div>
                 </div>
                 <p class="mb-2 shrink-0 text-xs text-slate-500">One chronological list for the target date. Polls every 30s.</p>
@@ -178,6 +195,26 @@
                 <div id="unifiedTimeline" class="hidden min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto overflow-x-hidden pr-1"></div>
             </div>
         </section>
+    </div>
+</div>
+
+<div id="adminGroupingBar" class="fixed bottom-6 left-1/2 z-[95] hidden w-[min(calc(100%-2rem),28rem)] max-w-full -translate-x-1/2 translate-y-2 opacity-0 transition-all duration-300 ease-out" role="region" aria-label="Режим групування слотів">
+    <div class="pointer-events-auto relative rounded-2xl border border-indigo-500/35 bg-slate-900/95 px-4 pb-3 pt-8 shadow-2xl shadow-black/50 ring-1 ring-indigo-500/25 backdrop-blur-md">
+        <button type="button" id="adminGroupingBarCloseBtn" title="Закрити режим групування"
+                class="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
+                aria-label="Закрити">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="flex flex-wrap items-center justify-center gap-2">
+            <button type="button" id="adminGroupingMergeBtn" disabled
+                    class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40">
+                Об'єднати (<span id="adminGroupingCount">0</span>)
+            </button>
+            <button type="button" id="adminGroupingBarCancelBtn"
+                    class="rounded-lg border border-slate-600 bg-slate-800/80 px-4 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700">
+                Скасувати
+            </button>
+        </div>
     </div>
 </div>
 
@@ -236,14 +273,44 @@
             const permanentBookingInput = document.getElementById('permanentBookingLinkInput');
             const permanentBookingCopyBtn = document.getElementById('permanentBookingCopyBtn');
             const permanentBookingCopyFeedback = document.getElementById('permanentBookingCopyFeedback');
+            const adminGroupingToggleBtn = document.getElementById('adminGroupingToggleBtn');
+            const adminGroupingBar = document.getElementById('adminGroupingBar');
+            const adminGroupingMergeBtn = document.getElementById('adminGroupingMergeBtn');
+            const adminGroupingBarCancelBtn = document.getElementById('adminGroupingBarCancelBtn');
+            const adminGroupingBarCloseBtn = document.getElementById('adminGroupingBarCloseBtn');
+            const adminGroupingCount = document.getElementById('adminGroupingCount');
+            const adminTimelinePanel = document.getElementById('adminTimelinePanel');
+            const adminPageRoot = document.getElementById('adminPageRoot');
+            const defaultSplitIntervalInput = document.getElementById('defaultSplitIntervalInput');
+            const saveDefaultSplitIntervalBtn = document.getElementById('saveDefaultSplitIntervalBtn');
 
             let pollTimer = null;
+            var groupingMode = false;
+            var selectedSlotIdsForMerge = [];
 
             function normalizeRow(row) {
-                if (typeof row.statusCode === 'number') return row;
-                var st = row.status || '';
-                row.statusCode = st === 'Available' ? 0 : st === 'BookedByClient' ? 2 : st === 'ReservedByAdmin' ? 3 : 0;
+                if (typeof row.statusCode !== 'number') {
+                    var st = row.status || '';
+                    row.statusCode = st === 'Available' ? 0 : st === 'BookedByClient' ? 2 : st === 'ReservedByAdmin' ? 3 : 0;
+                }
+                if (typeof row.isGrouped !== 'boolean') row.isGrouped = false;
                 return row;
+            }
+
+            function getDefaultSplitMinutes() {
+                var raw = adminPageRoot && adminPageRoot.getAttribute('data-default-split-minutes');
+                var v = parseInt(raw || '30', 10);
+                if (!Number.isFinite(v)) v = 30;
+                return Math.max(5, Math.min(480, v));
+            }
+
+            function setDefaultSplitMinutesOnPage(mins) {
+                if (adminPageRoot) adminPageRoot.setAttribute('data-default-split-minutes', String(mins));
+                if (defaultSplitIntervalInput) defaultSplitIntervalInput.value = String(mins);
+            }
+
+            function exitGroupingMode() {
+                setGroupingMode(false);
             }
 
             (function seedExisting() {
@@ -482,6 +549,172 @@
                 return out;
             }
 
+            function mergeResourceKey(row) {
+                return String(row.resourceContext || '').trim();
+            }
+
+            function clearGroupingSelection() {
+                selectedSlotIdsForMerge = [];
+                updateGroupingChrome();
+            }
+
+            function updateGroupingChrome() {
+                if (adminGroupingCount) adminGroupingCount.textContent = String(selectedSlotIdsForMerge.length);
+                if (adminGroupingMergeBtn) {
+                    adminGroupingMergeBtn.disabled = selectedSlotIdsForMerge.length < 2;
+                }
+                if (!adminGroupingBar) return;
+                if (groupingMode) {
+                    adminGroupingBar.classList.remove('hidden');
+                    adminGroupingBar.classList.remove('opacity-0', 'translate-y-2');
+                    adminGroupingBar.classList.add('opacity-100', 'translate-y-0');
+                } else {
+                    adminGroupingBar.classList.add('opacity-0', 'translate-y-2');
+                    adminGroupingBar.classList.remove('opacity-100', 'translate-y-0');
+                    window.setTimeout(function () {
+                        if (!groupingMode) adminGroupingBar.classList.add('hidden');
+                    }, 280);
+                }
+            }
+
+            function setGroupingMode(on) {
+                groupingMode = !!on;
+                if (!groupingMode) {
+                    clearGroupingSelection();
+                }
+                if (adminGroupingToggleBtn) {
+                    adminGroupingToggleBtn.classList.toggle('border-indigo-400', groupingMode);
+                    adminGroupingToggleBtn.classList.toggle('bg-indigo-600', groupingMode);
+                    adminGroupingToggleBtn.classList.toggle('text-white', groupingMode);
+                    adminGroupingToggleBtn.classList.toggle('shadow-md', groupingMode);
+                    adminGroupingToggleBtn.setAttribute('aria-pressed', groupingMode ? 'true' : 'false');
+                }
+                if (adminTimelinePanel) {
+                    adminTimelinePanel.classList.toggle('ring-2', groupingMode);
+                    adminTimelinePanel.classList.toggle('ring-indigo-500/50', groupingMode);
+                    adminTimelinePanel.classList.toggle('shadow-indigo-500/10', groupingMode);
+                }
+                updateGroupingChrome();
+                renderSlots();
+            }
+
+            function isValidContiguousMergeSet(ids) {
+                if (!ids || ids.length === 0) return false;
+                if (ids.length === 1) return true;
+                var ymd = targetDate && targetDate.value;
+                if (!ymd) return false;
+                var rows = ids.map(function (id) {
+                    return window.existingSlots.find(function (r) { return r.id === id; });
+                }).filter(Boolean);
+                if (rows.length !== ids.length) return false;
+                var rk = null;
+                for (var i = 0; i < rows.length; i++) {
+                    normalizeRow(rows[i]);
+                    if (rows[i].statusCode !== 0 || rows[i].date !== ymd) return false;
+                    var k = mergeResourceKey(rows[i]);
+                    if (rk === null) rk = k;
+                    else if (k !== rk) return false;
+                }
+                rows.sort(function (a, b) { return hmToMinutes(a.start) - hmToMinutes(b.start); });
+                for (var j = 0; j < rows.length - 1; j++) {
+                    if (hmToMinutes(rows[j].end) !== hmToMinutes(rows[j + 1].start)) return false;
+                }
+                return true;
+            }
+
+            function tryToggleMergeSelection(slotId) {
+                var row = window.existingSlots.find(function (r) { return r.id === slotId; });
+                if (!row) return;
+                normalizeRow(row);
+                if (row.statusCode !== 0) {
+                    showScheduleHint('Тільки послідовні вільні слоти!');
+                    return;
+                }
+                var idx = selectedSlotIdsForMerge.indexOf(slotId);
+                if (idx >= 0) {
+                    selectedSlotIdsForMerge.splice(idx, 1);
+                    updateGroupingChrome();
+                    renderSlots();
+                    return;
+                }
+                var tentative = selectedSlotIdsForMerge.concat([slotId]);
+                if (!isValidContiguousMergeSet(tentative)) {
+                    showScheduleHint('Тільки послідовні вільні слоти!');
+                    return;
+                }
+                tentative.sort(function (a, b) {
+                    var ra = window.existingSlots.find(function (r) { return r.id === a; });
+                    var rb = window.existingSlots.find(function (r) { return r.id === b; });
+                    return hmToMinutes(ra.start) - hmToMinutes(rb.start);
+                });
+                selectedSlotIdsForMerge = tentative;
+                hideScheduleHint();
+                updateGroupingChrome();
+                renderSlots();
+            }
+
+            async function executeMergeSelection() {
+                if (selectedSlotIdsForMerge.length < 2) return;
+                var sorted = selectedSlotIdsForMerge.slice().sort(function (a, b) {
+                    var ra = window.existingSlots.find(function (r) { return r.id === a; });
+                    var rb = window.existingSlots.find(function (r) { return r.id === b; });
+                    return hmToMinutes(ra.start) - hmToMinutes(rb.start);
+                });
+                var body = new URLSearchParams();
+                sorted.forEach(function (id) { body.append('slotIds', String(id)); });
+                body.set('__RequestVerificationToken', getCsrfToken());
+                try {
+                    var res = await fetch(adminUrl('MergeSlots'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (ex) { /* ignore */ }
+                    if (!res.ok || !data.success) {
+                        showScheduleHint((data && data.error) ? data.error : 'Не вдалося об’єднати слоти.');
+                        return;
+                    }
+                    hideScheduleHint();
+                    if (data.slots) {
+                        window.existingSlots = (data.slots || []).map(normalizeRow);
+                    }
+                    exitGroupingMode();
+                    await fetchExistingSnapshots();
+                } catch (e2) {
+                    showScheduleHint('Помилка мережі при об’єднанні.');
+                }
+            }
+
+            async function splitSavedSlot(slotId) {
+                var body = new URLSearchParams();
+                body.set('slotId', String(slotId));
+                body.set('__RequestVerificationToken', getCsrfToken());
+                try {
+                    var res = await fetch(adminUrl('SplitSlot'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (ex2) { /* ignore */ }
+                    if (!res.ok || !data.success) {
+                        showScheduleHint((data && data.error) ? data.error : 'Не вдалося розбити слот.');
+                        return;
+                    }
+                    hideScheduleHint();
+                    if (data.slots) {
+                        window.existingSlots = (data.slots || []).map(normalizeRow);
+                    }
+                    exitGroupingMode();
+                    await fetchExistingSnapshots();
+                } catch (e3) {
+                    showScheduleHint('Помилка мережі при розбитті.');
+                }
+            }
+
             function assignSlot(slotId) {
                 var panel = document.querySelector('[data-proxy-slot-panel="' + slotId + '"]');
                 if (!panel) return;
@@ -559,6 +792,7 @@
              * @@param {object} row
              */
             function savedRowEl(row) {
+                normalizeRow(row);
                 const wrap = document.createElement('div');
                 var code = row.statusCode;
                 var box = 'rounded-xl p-3 ring-1 ring-inset transition-colors ';
@@ -571,20 +805,39 @@
                 }
                 wrap.className = box;
                 wrap.dataset.savedSlotId = String(row.id);
+                if (groupingMode && code === 0 && selectedSlotIdsForMerge.indexOf(row.id) >= 0) {
+                    wrap.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2', 'ring-offset-slate-950');
+                }
 
                 const top = document.createElement('div');
                 top.className = 'mb-2 flex flex-wrap items-center justify-between gap-2';
+                var leftCol = document.createElement('div');
+                leftCol.className = 'flex min-w-0 flex-wrap items-center gap-2';
+                if (groupingMode && code === 0) {
+                    var pickBtn = document.createElement('button');
+                    pickBtn.type = 'button';
+                    pickBtn.className = 'shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/15 p-1.5 text-indigo-200 transition hover:bg-indigo-500/25';
+                    pickBtn.title = 'Додати або прибрати з об’єднання';
+                    pickBtn.setAttribute('aria-label', 'Вибір слота для об’єднання');
+                    pickBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>';
+                    pickBtn.addEventListener('click', function (ev) {
+                        ev.stopPropagation();
+                        tryToggleMergeSelection(row.id);
+                    });
+                    leftCol.appendChild(pickBtn);
+                }
                 const when = document.createElement('span');
-                when.className = 'font-mono text-sm ' + (code === 3 ? 'text-slate-400' : 'text-white');
+                when.className = 'min-w-0 truncate font-mono text-sm ' + (code === 3 ? 'text-slate-400' : 'text-white');
                 var rc = row.resourceContext ? ' · ' + row.resourceContext : '';
                 when.textContent = row.start + ' – ' + row.end + rc;
+                leftCol.appendChild(when);
                 const dur = document.createElement('span');
-                dur.className = 'rounded-full border px-2 py-0.5 text-xs font-medium ' + (
+                dur.className = 'shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ' + (
                     code === 2 ? 'border-amber-500/50 bg-amber-500/10 text-amber-100' :
                     code === 3 ? 'border-slate-600 bg-slate-900 text-slate-400' :
                     'border-blue-500/40 bg-slate-900 text-blue-100');
                 dur.textContent = formatDurationBadge(row.start, row.end);
-                top.appendChild(when);
+                top.appendChild(leftCol);
                 top.appendChild(dur);
                 wrap.appendChild(top);
 
@@ -602,46 +855,59 @@
                 const actions = document.createElement('div');
                 actions.className = 'mt-1 flex flex-wrap items-center gap-2';
 
-                if (code === 0) {
-                    const assignBtn = document.createElement('button');
-                    assignBtn.type = 'button';
-                    assignBtn.className = 'rounded-lg border border-indigo-400/55 bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-100 hover:bg-indigo-600/35';
-                    assignBtn.innerHTML = '<span class="inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path stroke-linecap="round" d="M20 8v6M23 11h-6"/></svg>Assign</span>';
-                    assignBtn.title = 'Book walk-in / phone customer';
-                    assignBtn.addEventListener('click', function () { assignSlot(row.id); });
-                    actions.appendChild(assignBtn);
+                if (!(groupingMode && code === 0)) {
+                    if (code === 0) {
+                        const assignBtn = document.createElement('button');
+                        assignBtn.type = 'button';
+                        assignBtn.className = 'rounded-lg border border-indigo-400/55 bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-100 hover:bg-indigo-600/35';
+                        assignBtn.innerHTML = '<span class="inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path stroke-linecap="round" d="M20 8v6M23 11h-6"/></svg>Assign</span>';
+                        assignBtn.title = 'Book walk-in / phone customer';
+                        assignBtn.addEventListener('click', function () { assignSlot(row.id); });
+                        actions.appendChild(assignBtn);
 
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'rounded-lg border border-blue-400/60 bg-blue-600/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600/40';
-                    btn.textContent = 'Block';
-                    btn.addEventListener('click', function () {
-                        toggleStatus(row.id);
-                    });
-                    actions.appendChild(btn);
-                } else if (code === 3) {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'rounded-lg border border-slate-600 bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600/60';
-                    btn.textContent = 'Unblock';
-                    btn.addEventListener('click', function () {
-                        toggleStatus(row.id);
-                    });
-                    actions.appendChild(btn);
-                }
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'rounded-lg border border-blue-400/60 bg-blue-600/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600/40';
+                        btn.textContent = 'Block';
+                        btn.addEventListener('click', function () {
+                            toggleStatus(row.id);
+                        });
+                        actions.appendChild(btn);
 
-                if (row.id > 0) {
-                    const delBtn = document.createElement('button');
-                    delBtn.type = 'button';
-                    delBtn.className = 'ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/15 hover:text-red-300';
-                    delBtn.innerHTML = '<span aria-hidden="true" class="text-base leading-none">\u00D7</span> Delete';
-                    delBtn.setAttribute('onclick', 'window.deleteSavedSlot(' + row.id + '); return false;');
-                    actions.appendChild(delBtn);
+                        if (row.isGrouped === true) {
+                            var splitM = getDefaultSplitMinutes();
+                            var splitBtn = document.createElement('button');
+                            splitBtn.type = 'button';
+                            splitBtn.className = 'inline-flex items-center gap-1 rounded-lg border border-violet-400/50 bg-violet-600/15 px-2.5 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-600/30';
+                            splitBtn.title = 'Розбити на інтервали по ' + splitM + ' хв';
+                            splitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12M8 12h12m-12 5h12M4 7h.01M4 12h.01M4 17h.01"/></svg><span>Розгрупувати</span>';
+                            splitBtn.addEventListener('click', function () { splitSavedSlot(row.id); });
+                            actions.appendChild(splitBtn);
+                        }
+                    } else if (code === 3) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'rounded-lg border border-slate-600 bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600/60';
+                        btn.textContent = 'Unblock';
+                        btn.addEventListener('click', function () {
+                            toggleStatus(row.id);
+                        });
+                        actions.appendChild(btn);
+                    }
+
+                    if (row.id > 0 && !(groupingMode && code === 0)) {
+                        const delBtn = document.createElement('button');
+                        delBtn.type = 'button';
+                        delBtn.className = 'ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/15 hover:text-red-300';
+                        delBtn.innerHTML = '<span aria-hidden="true" class="text-base leading-none">\u00D7</span> Delete';
+                        delBtn.setAttribute('onclick', 'window.deleteSavedSlot(' + row.id + '); return false;');
+                        actions.appendChild(delBtn);
+                    }
                 }
 
                 wrap.appendChild(actions);
 
-                if (code === 0) {
+                if (code === 0 && !groupingMode) {
                     const panel = document.createElement('div');
                     panel.className = 'proxy-assign-panel hidden mt-2 w-full space-y-2 rounded-lg border border-slate-700/60 bg-slate-950/90 p-2.5 ring-1 ring-inset ring-slate-600/30';
                     panel.dataset.proxySlotPanel = String(row.id);
@@ -978,6 +1244,10 @@
                     var data = await res.json();
                     var arr = (data.slots || []).map(normalizeRow);
                     window.existingSlots = arr;
+                    var idSet = {};
+                    arr.forEach(function (r) { idSet[r.id] = true; });
+                    selectedSlotIdsForMerge = selectedSlotIdsForMerge.filter(function (id) { return idSet[id]; });
+                    updateGroupingChrome();
                     hideScheduleHint();
                     renderSlots();
                 } catch (e) {
@@ -1127,11 +1397,57 @@
             });
 
             targetDate?.addEventListener('change', function () {
+                exitGroupingMode();
                 updatePermanentBookingLink();
                 fetchExistingSnapshots();
             });
             refreshBtn?.addEventListener('click', function () {
                 fetchExistingSnapshots();
+            });
+
+            adminGroupingToggleBtn?.addEventListener('click', function () {
+                setGroupingMode(!groupingMode);
+            });
+            adminGroupingBarCancelBtn?.addEventListener('click', function () {
+                exitGroupingMode();
+            });
+            adminGroupingBarCloseBtn?.addEventListener('click', function () {
+                exitGroupingMode();
+            });
+            adminGroupingMergeBtn?.addEventListener('click', function () {
+                executeMergeSelection();
+            });
+
+            saveDefaultSplitIntervalBtn?.addEventListener('click', async function () {
+                var raw = defaultSplitIntervalInput && parseInt(defaultSplitIntervalInput.value, 10);
+                if (!Number.isFinite(raw)) {
+                    showScheduleHint('Вкажіть коректну кількість хвилин (5–480).');
+                    return;
+                }
+                var body = new URLSearchParams();
+                body.set('minutes', String(raw));
+                body.set('__RequestVerificationToken', getCsrfToken());
+                try {
+                    var res = await fetch(adminUrl('DefaultSlotInterval'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                        body: body.toString(),
+                        credentials: 'same-origin'
+                    });
+                    var data = {};
+                    try { data = await res.json(); } catch (exD) { /* ignore */ }
+                    if (!res.ok || !data.success) {
+                        showScheduleHint((data && data.error) ? data.error : 'Не вдалося зберегти інтервал.');
+                        return;
+                    }
+                    hideScheduleHint();
+                    if (typeof data.defaultSlotIntervalMinutes === 'number') {
+                        setDefaultSplitMinutesOnPage(data.defaultSlotIntervalMinutes);
+                    }
+                    renderSlots();
+                } catch (eInt) {
+                    showScheduleHint('Помилка мережі при збереженні інтервалу.');
+                }
             });
 
             if (pollTimer) clearInterval(pollTimer);
