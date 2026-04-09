@@ -50,9 +50,6 @@ public class AdminModel : PageModel
     [BindProperty]
     public string? FinalSlotsJson { get; set; }
 
-    /// <summary>Relative URL from TempData["GeneratedLink"] after save (one-shot).</summary>
-    public string? PromoBookingPath { get; set; }
-
     /// <summary>Slug or user name for <c>?slug=</c> on the public booking page.</summary>
     public string BookingLinkSlug { get; set; } = "";
 
@@ -88,15 +85,11 @@ public class AdminModel : PageModel
 
         await PrepareSchedulePageAsync(user, day);
 
-        if (TempData.TryGetValue("GeneratedLink", out var genObj) && genObj is string genLink && !string.IsNullOrWhiteSpace(genLink))
-        {
-            PromoBookingPath = genLink.Trim();
-        }
-
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAssignBookingAsync()
+    /// <summary>Full-page assign booking form (walk-in or linked customer).</summary>
+    public async Task<IActionResult> OnPostAssignBookingFormAsync()
     {
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
@@ -192,6 +185,74 @@ public class AdminModel : PageModel
         await tx.CommitAsync();
 
         return RedirectToPage(new { date = day.ToString("yyyy-MM-dd") });
+    }
+
+    /// <summary>AJAX: book an available slot for a walk-in / phone customer from the timeline (no full reload).</summary>
+    public async Task<IActionResult> OnPostAssignBookingAsync(int slotId, string? customerName, string? customerPhone)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        customerName = (customerName ?? string.Empty).Trim();
+        customerPhone = (customerPhone ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(customerName))
+        {
+            return new JsonResult(new { success = false, error = "Ім'я обов'язкове." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        if (string.IsNullOrEmpty(customerPhone))
+        {
+            return new JsonResult(new { success = false, error = "Вкажіть телефон." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var slotEntity = await _context.Slots.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == user.Id);
+        if (slotEntity == null)
+        {
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (slotEntity.Status != SlotStatus.Available)
+        {
+            return new JsonResult(new { success = false, error = "Слот уже зайнято або заблоковано." }, JsonWriteOptions) { StatusCode = 409 };
+        }
+
+        await using var tx = await _context.Database.BeginTransactionAsync();
+
+        var updatedRows = await _context.Slots
+            .Where(s => s.Id == slotId && s.ProviderId == user.Id && s.Status == SlotStatus.Available)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.BookedByClient));
+        if (updatedRows == 0)
+        {
+            await tx.RollbackAsync();
+            return new JsonResult(new { success = false, error = "Слот щойно зайнято. Оновіть список." }, JsonWriteOptions) { StatusCode = 409 };
+        }
+
+        _context.Bookings.Add(new Booking
+        {
+            SlotId = slotId,
+            CustomerId = null,
+            AssignedByProviderId = user.Id,
+            CustomerName = customerName,
+            CustomerPhone = customerPhone,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        var day = DateOnly.FromDateTime(slotEntity.StartTime);
+        var refreshed = await LoadSlotsForDayAsync(user.Id, day);
+        var entity = refreshed.FirstOrDefault(s => s.Id == slotId);
+        if (entity == null)
+        {
+            return new JsonResult(new { success = true }, JsonWriteOptions);
+        }
+
+        var snap = ToSnapshotDto(entity, day.ToString("yyyy-MM-dd"));
+        return new JsonResult(new { success = true, slot = snap }, JsonWriteOptions);
     }
 
     private async Task PrepareSchedulePageAsync(Provider user, DateOnly day)
@@ -422,12 +483,6 @@ public class AdminModel : PageModel
 
         _context.Slots.AddRange(slots);
         await _context.SaveChangesAsync();
-
-        var targetDateStr = DateOnly.FromDateTime(slots[0].StartTime).ToString("yyyy-MM-dd");
-        var slugQ = string.IsNullOrWhiteSpace(user.Slug)
-            ? Uri.EscapeDataString(user.UserName ?? user.Email ?? "")
-            : Uri.EscapeDataString(user.Slug.Trim());
-        TempData["GeneratedLink"] = $"/Booking?slug={slugQ}&date={targetDateStr}";
 
         return RedirectToPage();
     }

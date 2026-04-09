@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
@@ -127,7 +128,7 @@ public class BookingModel : PageModel
             date = Request.Query["date"].FirstOrDefault();
         }
 
-        if (!DateTime.TryParse(date, out var dayParsed))
+        if (!DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dayParsed))
         {
             dayParsed = DateTime.Today;
         }
@@ -143,6 +144,72 @@ public class BookingModel : PageModel
             .ToListAsync();
 
         return new JsonResult(new { slots }, JsonWriteOptions);
+    }
+
+    /// <summary>JSON day schedule for client-side date changes (no full page reload).</summary>
+    public async Task<IActionResult> OnGetDayScheduleAsync(string? slug, string? date)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            slug = Request.Query["slug"].FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            return new JsonResult(new { error = "Invalid provider." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        var normalizedSlug = slug.TrimStart('@');
+        normalizedSlug = string.IsNullOrEmpty(normalizedSlug) ? slug : "@" + normalizedSlug;
+
+        var provider = await _context.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
+        if (provider == null)
+        {
+            return new JsonResult(new { error = "Provider not found." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (string.IsNullOrWhiteSpace(date))
+        {
+            date = Request.Query["date"].FirstOrDefault();
+        }
+
+        if (!DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dayParsed))
+        {
+            dayParsed = DateTime.Today;
+        }
+
+        var dayStart = DateTime.SpecifyKind(dayParsed.Date, DateTimeKind.Unspecified);
+        var dayEndExclusive = dayStart.AddDays(1);
+
+        var rawSlots = await _context.Slots
+            .AsNoTracking()
+            .Where(s => s.ProviderId == provider.Id && s.StartTime >= dayStart && s.StartTime < dayEndExclusive)
+            .OrderBy(s => s.StartTime)
+            .ToListAsync();
+
+        var uk = new CultureInfo("uk-UA");
+        var dateYmd = dayParsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var titleDateUk = dayParsed.ToString("d MMMM yyyy", uk);
+        var publicAvailableSlotCount = rawSlots.Count(s => s.Status == SlotStatus.Available);
+
+        var slots = rawSlots.Select(s => new
+        {
+            id = s.Id,
+            start = s.StartTime.ToString("HH:mm"),
+            end = s.EndTime.ToString("HH:mm"),
+            resourceContext = s.ResourceContext,
+            status = SlotStatusApiToken(s.Status),
+        }).ToList();
+
+        return new JsonResult(new
+        {
+            dateYmd,
+            titleDateUk,
+            publicAvailableSlotCount,
+            totalCount = slots.Count,
+            slots,
+        }, JsonWriteOptions);
     }
 
     public async Task<IActionResult> OnPostBookAsync(string? slug, int slotId, string? name, string? phone)
