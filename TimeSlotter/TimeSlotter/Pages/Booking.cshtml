@@ -2,6 +2,7 @@
 @model TimeSlotter.Pages.BookingModel
 @{
     ViewData["Title"] = "Бронювання";
+    ViewData["HtmlLang"] = "uk-UA";
 }
 
 <style>
@@ -54,14 +55,17 @@
                                 @Model.Provider.Name
                             </span>
                         </div>
-                        <div class="flex flex-wrap items-end justify-start gap-2 sm:justify-end">
+                        <div class="flex min-w-0 flex-1 flex-col items-stretch gap-2 sm:max-w-md sm:items-end">
                             <label class="sr-only" for="bookingDateInput">Дата</label>
-                            <input id="bookingDateInput" type="date" value="@Model.DateYmd"
-                                   class="min-h-[2.5rem] rounded-lg border-0 bg-slate-800 px-3 py-2 text-sm text-white ring-1 ring-inset ring-slate-600 focus:ring-2 focus:ring-blue-500"/>
-                            <button type="button" id="bookingDateGo"
-                                    class="min-h-[2.5rem] shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-100 transition hover:border-slate-500 hover:bg-slate-700">
-                                Показати
-                            </button>
+                            <div class="flex flex-wrap items-end gap-2">
+                                <input id="bookingDateInput" type="date" value="@Model.DateYmd"
+                                       class="min-h-[2.5rem] rounded-lg border-0 bg-slate-800 px-3 py-2 text-sm text-white ring-1 ring-inset ring-slate-600 focus:ring-2 focus:ring-blue-500"/>
+                                <button type="button" id="bookingDateGo"
+                                        class="min-h-[2.5rem] shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-100 transition hover:border-slate-500 hover:bg-slate-700">
+                                    Показати
+                                </button>
+                            </div>
+                            <p id="bookingDateUk" class="text-xs text-slate-400">@Model.TitleDateUk</p>
                         </div>
                     </div>
                 </div>
@@ -97,7 +101,7 @@
                                     }
                                     @if (isAvailable && slot.RequiresApproval)
                                     {
-                                        <span class="slot-approval-hint mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">На перевірку після заявки</span>
+                                        <span class="slot-approval-hint mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">Потребує підтвердження</span>
                                     }
                                 </div>
                                 <div class="slot-actions">
@@ -106,7 +110,7 @@
                                         @if (Model.IsSiteAdmin)
                                         {
                                             <div class="mb-2 flex justify-end">
-                                                <button type="button" class="admin-reserve-slot-btn shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/25 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/40" title="Admin Reserve">🔒 Reserve</button>
+                                                <button type="button" class="admin-reserve-slot-btn shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/25 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/40" title="Заблокувати (адмін)">🔒 Блок</button>
                                             </div>
                                         }
                                         <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">
@@ -117,7 +121,7 @@
                                             <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
                                             <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
                                             <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">
-                                                Підтвердити бронювання
+                                                Підтвердити
                                             </button>
                                         </div>
                                     }
@@ -127,17 +131,17 @@
                                     }
                                     else if (isBooked)
                                     {
-                                        <p class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Booked</p>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Зайнято</p>
                                     }
                                     else if (Model.IsSiteAdmin && isReserved)
                                     {
-                                        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Reserved</p>
-                                        <p class="mb-2 text-xs text-slate-500">Admin Reserve</p>
-                                        <button type="button" class="admin-release-slot-btn w-full rounded-lg border border-emerald-500/50 bg-emerald-600/20 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-600/35">Release</button>
+                                        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Заблоковано</p>
+                                        <p class="mb-2 text-xs text-slate-500">Блок адміна</p>
+                                        <button type="button" class="admin-release-slot-btn w-full rounded-lg border border-emerald-500/50 bg-emerald-600/20 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-600/35">Зняти блок</button>
                                     }
                                     else
                                     {
-                                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Unavailable</p>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Недоступно</p>
                                     }
                                 </div>
                             </article>
@@ -154,34 +158,34 @@
                         <button type="button" class="cancel-book-btn self-end text-xs font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-200 hover:decoration-slate-400">Скасувати</button>
                         <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
                         <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
-                        <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити бронювання</button>
+                        <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити</button>
                     </div>
                 </template>
                 <template id="tmpl-slot-actions-available-admin">
                     <div class="mb-2 flex justify-end">
-                        <button type="button" class="admin-reserve-slot-btn shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/25 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/40" title="Admin Reserve">🔒 Reserve</button>
+                        <button type="button" class="admin-reserve-slot-btn shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/25 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/40" title="Заблокувати (адмін)">🔒 Блок</button>
                     </div>
                     <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">Забронювати</button>
                     <div class="book-form hidden w-full flex-col gap-2">
                         <button type="button" class="cancel-book-btn self-end text-xs font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-200 hover:decoration-slate-400">Скасувати</button>
                         <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
                         <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
-                        <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити бронювання</button>
+                        <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити</button>
                     </div>
                 </template>
                 <template id="tmpl-slot-actions-pending">
                     <p class="text-xs font-semibold uppercase tracking-wide text-violet-200/90">Очікує підтвердження</p>
                 </template>
                 <template id="tmpl-slot-actions-booked">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Booked</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Зайнято</p>
                 </template>
                 <template id="tmpl-slot-actions-reserved">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Unavailable</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Недоступно</p>
                 </template>
                 <template id="tmpl-slot-actions-reserved-admin">
-                    <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Reserved</p>
-                    <p class="mb-2 text-xs text-slate-500">Admin Reserve</p>
-                    <button type="button" class="admin-release-slot-btn w-full rounded-lg border border-emerald-500/50 bg-emerald-600/20 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-600/35">Release</button>
+                    <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Заблоковано</p>
+                    <p class="mb-2 text-xs text-slate-500">Блок адміна</p>
+                    <button type="button" class="admin-release-slot-btn w-full rounded-lg border border-emerald-500/50 bg-emerald-600/20 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-600/35">Зняти блок</button>
                 </template>
         </div>
     }
@@ -193,7 +197,7 @@
     <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-xl ring-1 ring-white/10">
         <h2 id="bookingSuccessTitle" class="text-lg font-semibold text-white">Заброньовано!</h2>
         <p id="bookingSuccessBody" class="mt-2 text-sm text-slate-400">До зустрічі.</p>
-        <button type="button" id="bookingSuccessClose" class="mt-6 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500">OK</button>
+        <button type="button" id="bookingSuccessClose" class="mt-6 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500">Готово</button>
     </div>
 </div>
 
@@ -307,7 +311,7 @@
                     if (card.getAttribute('data-status') !== 'available') return;
                     var hint = document.createElement('span');
                     hint.className = 'slot-approval-hint mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-200/90';
-                    hint.textContent = 'На перевірку після заявки';
+                    hint.textContent = 'Потребує підтвердження';
                     timeBlock.appendChild(hint);
                 }
 
@@ -448,6 +452,8 @@
                             return;
                         }
                         if (dateInput) dateInput.value = data.dateYmd || dateYmd;
+                        var dateUkEl = document.getElementById('bookingDateUk');
+                        if (dateUkEl && data.titleDateUk) dateUkEl.textContent = data.titleDateUk;
                         renderDaySchedule(data);
                         if (pushHistory) {
                             var targetUrl = bookingPageUrl(data.dateYmd || dateYmd);
@@ -555,18 +561,18 @@
 
                     if (reserveAdminBtn) {
                         (async function () {
-                            if (!confirm('Reserve this slot? It will block public booking (Admin Reserve).')) return;
+                            if (!confirm('Заблокувати цей слот? Публічне бронювання буде недоступне.')) return;
                             var id = parseInt(card.getAttribute('data-slot-id'), 10);
                             try {
                                 var out = await postAdminSlotHandler('ReserveSlot', id);
                                 if (!out.res.ok || !out.data.success) {
-                                    showBookingToast(out.data.error || 'Could not reserve slot.');
+                                    showBookingToast(out.data.error || 'Не вдалося заблокувати слот.');
                                     await fetchSlotStatuses();
                                     return;
                                 }
                                 await fetchSlotStatuses();
                             } catch (err) {
-                                showBookingToast('Network error.');
+                                showBookingToast('Помилка мережі.');
                             }
                         })();
                         return;
@@ -574,18 +580,18 @@
 
                     if (releaseAdminBtn) {
                         (async function () {
-                            if (!confirm('Release this slot for public booking?')) return;
+                            if (!confirm('Зняти блок і відкрити слот для бронювання?')) return;
                             var id = parseInt(card.getAttribute('data-slot-id'), 10);
                             try {
                                 var out = await postAdminSlotHandler('ReleaseSlot', id);
                                 if (!out.res.ok || !out.data.success) {
-                                    showBookingToast(out.data.error || 'Could not release slot.');
+                                    showBookingToast(out.data.error || 'Не вдалося зняти блок.');
                                     await fetchSlotStatuses();
                                     return;
                                 }
                                 await fetchSlotStatuses();
                             } catch (err) {
-                                showBookingToast('Network error.');
+                                showBookingToast('Помилка мережі.');
                             }
                         })();
                         return;
@@ -642,8 +648,8 @@
                                 });
                                 var data = {};
                                 try { data = await res.json(); } catch (x) { }
-                                if (res.status === 409 || data.message === 'Slot already booked') {
-                                    showBookingToast(data.error || 'This slot was just taken. Please choose another time.');
+                                if (res.status === 409 || data.message === 'SlotAlreadyBooked') {
+                                    showBookingToast(data.error || 'Цей слот щойно зайняли. Оберіть інший час.');
                                     await fetchSlotStatuses();
                                     btn.disabled = false;
                                     return;

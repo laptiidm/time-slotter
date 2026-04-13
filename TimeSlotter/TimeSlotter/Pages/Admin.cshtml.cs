@@ -97,7 +97,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var clamped = Math.Clamp(minutes, 5, 480);
@@ -105,7 +105,7 @@ public class AdminModel : PageModel
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
-            return new JsonResult(new { success = false, error = "Could not update settings." }, JsonWriteOptions) { StatusCode = 500 };
+            return new JsonResult(new { success = false, error = "Не вдалося зберегти налаштування." }, JsonWriteOptions) { StatusCode = 500 };
         }
 
         return new JsonResult(new { success = true, defaultSlotIntervalMinutes = clamped }, JsonWriteOptions);
@@ -132,11 +132,11 @@ public class AdminModel : PageModel
 
         if (AssignSlotId <= 0 || slot == null)
         {
-            ModelState.AddModelError(string.Empty, "Select a valid slot.");
+            ModelState.AddModelError(string.Empty, "Оберіть коректний слот.");
         }
         else if (slot.Status != SlotStatus.Available)
         {
-            ModelState.AddModelError(string.Empty, "That slot is no longer available.");
+            ModelState.AddModelError(string.Empty, "Цей слот уже недоступний.");
         }
 
         string customerName = "";
@@ -151,12 +151,12 @@ public class AdminModel : PageModel
             customerId = null;
             if (string.IsNullOrEmpty(customerName) || string.IsNullOrEmpty(customerPhone))
             {
-                ModelState.AddModelError(string.Empty, "Walk-in bookings need name and phone.");
+                ModelState.AddModelError(string.Empty, "Для гостя без акаунта потрібні ім'я та телефон.");
             }
         }
         else if (!int.TryParse(sel, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var cid))
         {
-            ModelState.AddModelError(string.Empty, "Invalid customer selection.");
+            ModelState.AddModelError(string.Empty, "Некоректний вибір клієнта.");
         }
         else
         {
@@ -164,7 +164,7 @@ public class AdminModel : PageModel
             var cust = await _userManager.FindByIdAsync(cid.ToString());
             if (cust == null)
             {
-                ModelState.AddModelError(string.Empty, "Customer not found.");
+                ModelState.AddModelError(string.Empty, "Клієнта не знайдено.");
             }
             else
             {
@@ -172,7 +172,7 @@ public class AdminModel : PageModel
                 customerPhone = (cust.PhoneNumber ?? "").Trim();
                 if (string.IsNullOrEmpty(customerName) || string.IsNullOrEmpty(customerPhone))
                 {
-                    ModelState.AddModelError(string.Empty, "Selected account must have name and phone, or choose walk-in.");
+                    ModelState.AddModelError(string.Empty, "У обраного акаунта мають бути ім'я та телефон, або оберіть гостя без акаунта.");
                 }
             }
         }
@@ -190,7 +190,7 @@ public class AdminModel : PageModel
         if (updatedRows == 0)
         {
             await tx.RollbackAsync();
-            ModelState.AddModelError(string.Empty, "Slot was just taken; refresh and try again.");
+            ModelState.AddModelError(string.Empty, "Слот щойно зайняли; оновіть сторінку й спробуйте ще раз.");
             await PrepareSchedulePageAsync(user, day);
             return Page();
         }
@@ -216,7 +216,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         customerName = (customerName ?? string.Empty).Trim();
@@ -313,7 +313,7 @@ public class AdminModel : PageModel
 
         if (!DateOnly.TryParse(date, out var day))
         {
-            return new JsonResult(new { error = "Invalid date." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { error = "Некоректна дата." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         var entities = await LoadSlotsForDayAsync(user.Id, day);
@@ -327,18 +327,18 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == id && s.ProviderId == user.Id);
         if (slot == null)
         {
-            return new JsonResult(new { success = false, error = "Slot not found." }, JsonWriteOptions) { StatusCode = 404 };
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         if (slot.Status is SlotStatus.BookedByClient or SlotStatus.Pending)
         {
-            return new JsonResult(new { success = false, error = "Cannot change a client-booked slot." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { success = false, error = "Неможливо змінити слот із бронюванням клієнта." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         if (slot.Status == SlotStatus.Available)
@@ -351,7 +351,7 @@ public class AdminModel : PageModel
         }
         else
         {
-            return new JsonResult(new { success = false, error = "Slot status cannot be toggled." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { success = false, error = "Неможливо перемкнути статус цього слота." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         await _context.SaveChangesAsync();
@@ -365,13 +365,13 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == id && s.ProviderId == user.Id);
         if (slot == null)
         {
-            return new JsonResult(new { success = false, error = "Slot not found." }, JsonWriteOptions) { StatusCode = 404 };
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         if (slot.Status != SlotStatus.Available)
@@ -393,7 +393,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var slot = await _context.Slots
@@ -425,7 +425,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var slot = await _context.Slots
@@ -457,13 +457,13 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == id && s.ProviderId == user.Id);
         if (slot == null)
         {
-            return new JsonResult(new { success = false, error = "Slot not found." }, JsonWriteOptions) { StatusCode = 404 };
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         _context.Slots.Remove(slot);
@@ -477,7 +477,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         if (slotIds is null || slotIds.Count < 2)
@@ -557,7 +557,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var fallback = Math.Clamp(user.DefaultSlotIntervalMinutes <= 0 ? 30 : user.DefaultSlotIntervalMinutes, 5, 480);
@@ -662,7 +662,7 @@ public class AdminModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
         }
 
         var dayStart = DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified);
@@ -701,7 +701,7 @@ public class AdminModel : PageModel
         }
         catch (JsonException)
         {
-            ModelState.AddModelError(string.Empty, "Invalid slot data.");
+            ModelState.AddModelError(string.Empty, "Некоректні дані слотів.");
             var day = DateOnly.FromDateTime(DateTime.Today);
             if (DateOnly.TryParse(ScheduleInitialDate, out var pd))
             {
@@ -762,7 +762,7 @@ public class AdminModel : PageModel
                 && (s.ResourceContext ?? string.Empty) == rcKey);
             if (overlapsPersisted)
             {
-                return BadRequest("Time overlap detected");
+                return BadRequest("Виявлено накладання за часом.");
             }
         }
 
@@ -779,7 +779,7 @@ public class AdminModel : PageModel
 
                 if (a.StartTime < b.EndTime && b.StartTime < a.EndTime)
                 {
-                    return BadRequest("Time overlap detected");
+                    return BadRequest("Виявлено накладання за часом.");
                 }
             }
         }

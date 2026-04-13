@@ -33,6 +33,8 @@ public class BookingModel : PageModel
     public List<Slot> DaySlots { get; set; } = new();
     public DateTime SelectedDate { get; set; }
     public string DateYmd { get; set; } = "";
+    /// <summary>Selected day for display (e.g. «14 квітня 2026 р.»).</summary>
+    public string TitleDateUk { get; set; } = "";
     /// <summary>Raw slug from route (for building URLs).</summary>
     public string SlugRoute { get; set; } = "";
 
@@ -74,6 +76,8 @@ public class BookingModel : PageModel
         SlugRoute = slug.Trim();
         SelectedDate = date?.Date ?? DateTime.Today;
         DateYmd = SelectedDate.ToString("yyyy-MM-dd");
+        var uk = new CultureInfo("uk-UA");
+        TitleDateUk = SelectedDate.ToString("d MMMM yyyy", uk) + " р.";
 
         var dayStart = DateTime.SpecifyKind(SelectedDate.Date, DateTimeKind.Unspecified);
         var dayEndExclusive = dayStart.AddDays(1);
@@ -110,7 +114,7 @@ public class BookingModel : PageModel
 
         if (string.IsNullOrWhiteSpace(slug))
         {
-            return new JsonResult(new { error = "Invalid provider." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { error = "Некоректне посилання провайдера." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         var normalizedSlug = slug.TrimStart('@');
@@ -120,7 +124,7 @@ public class BookingModel : PageModel
             .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
         if (provider == null)
         {
-            return new JsonResult(new { error = "Provider not found." }, JsonWriteOptions) { StatusCode = 404 };
+            return new JsonResult(new { error = "Провайдера не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         if (string.IsNullOrWhiteSpace(date))
@@ -161,7 +165,7 @@ public class BookingModel : PageModel
 
         if (string.IsNullOrWhiteSpace(slug))
         {
-            return new JsonResult(new { error = "Invalid provider." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { error = "Некоректне посилання провайдера." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         var normalizedSlug = slug.TrimStart('@');
@@ -171,7 +175,7 @@ public class BookingModel : PageModel
             .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
         if (provider == null)
         {
-            return new JsonResult(new { error = "Provider not found." }, JsonWriteOptions) { StatusCode = 404 };
+            return new JsonResult(new { error = "Провайдера не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         if (string.IsNullOrWhiteSpace(date))
@@ -195,7 +199,7 @@ public class BookingModel : PageModel
 
         var uk = new CultureInfo("uk-UA");
         var dateYmd = dayParsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        var titleDateUk = dayParsed.ToString("d MMMM yyyy", uk);
+        var titleDateUk = dayParsed.ToString("d MMMM yyyy", uk) + " р.";
         var publicAvailableSlotCount = rawSlots.Count(s => s.Status == SlotStatus.Available);
 
         var slots = rawSlots.Select(s => new
@@ -222,7 +226,7 @@ public class BookingModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(slug))
         {
-            return new JsonResult(new { success = false, error = "Invalid provider." }, JsonWriteOptions) { StatusCode = 400 };
+            return new JsonResult(new { success = false, error = "Некоректне посилання провайдера." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
         name = (name ?? string.Empty).Trim();
@@ -259,7 +263,7 @@ public class BookingModel : PageModel
             .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
         if (provider == null)
         {
-            return new JsonResult(new { success = false, error = "Provider not found." }, JsonWriteOptions) { StatusCode = 404 };
+            return new JsonResult(new { success = false, error = "Провайдера не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
         await using var tx = await _context.Database.BeginTransactionAsync();
@@ -281,9 +285,9 @@ WHERE Id = {slotId} AND ProviderId = {provider.Id} AND Status = {(int)SlotStatus
             await tx.RollbackAsync();
             return new JsonResult(new
             {
-                message = "Slot already booked",
+                message = "SlotAlreadyBooked",
                 success = false,
-                error = "This slot was just taken. Please choose another time.",
+                error = "Цей слот щойно зайняли. Оберіть інший час.",
             }, JsonWriteOptions)
             {
                 StatusCode = StatusCodes.Status409Conflict,

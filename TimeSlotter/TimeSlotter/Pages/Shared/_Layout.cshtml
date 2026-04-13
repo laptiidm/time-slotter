@@ -21,21 +21,21 @@
             @* Brand left — account actions right *@
             <a asp-area="" asp-page="/Index" class="px-4 text-xl font-bold tracking-tight text-white sm:px-4"><span class="mx-2">Time-Slotter</span></a>
 
-            <nav class="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 px-4 sm:px-4" aria-label="Account">
+            <nav class="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 px-4 sm:px-4" aria-label="Обліковий запис">
                 @if (User.Identity?.IsAuthenticated == true)
                 {
-                    <a asp-page="/MyBookings" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">My bookings</a>
+                    <a asp-page="/MyBookings" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Мої бронювання</a>
                     <form method="post" asp-page="/Index" asp-page-handler="Logout" class="m-0 inline">
                         <button type="submit"
                                 class="mx-2 rounded-md px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900">
-                            Logout
+                            Вийти
                         </button>
                     </form>
                 }
                 else
                 {
-                    <a asp-page="/Index" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Login</a>
-                    <a asp-page="/Register" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Register</a>
+                    <a asp-page="/Index" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Увійти</a>
+                    <a asp-page="/Register" class="mx-2 px-2 py-1.5 text-sm text-slate-400 transition-colors hover:text-white">Реєстрація</a>
                 }
             </nav>
         </div>

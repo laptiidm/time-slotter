@@ -24,7 +24,7 @@ public static class AdminSlotRoleHandlers
     {
         if (user.Identity?.IsAuthenticated != true || !user.IsInRole("Admin"))
         {
-            return new JsonResult(new { success = false, error = "Forbidden." }, JsonWriteOptions)
+            return new JsonResult(new { success = false, error = "Доступ заборонено." }, JsonWriteOptions)
             {
                 StatusCode = StatusCodes.Status403Forbidden,
             };
@@ -37,21 +37,21 @@ public static class AdminSlotRoleHandlers
         if (updated == 0)
         {
             await tx.RollbackAsync();
-            return new JsonResult(new { success = false, error = "Slot is no longer available or was not found." }, JsonWriteOptions)
+            return new JsonResult(new { success = false, error = "Слот уже недоступний або не знайдено." }, JsonWriteOptions)
             {
                 StatusCode = StatusCodes.Status409Conflict,
             };
         }
 
         await tx.CommitAsync();
-        return new JsonResult(new { success = true, newStatus = "reserved", note = "Admin Reserve" }, JsonWriteOptions);
+        return new JsonResult(new { success = true, newStatus = "reserved", note = "admin_reserve" }, JsonWriteOptions);
     }
 
     public static async Task<IActionResult> ReleaseSlotAsync(ClaimsPrincipal user, AppDbContext context, int slotId)
     {
         if (user.Identity?.IsAuthenticated != true || !user.IsInRole("Admin"))
         {
-            return new JsonResult(new { success = false, error = "Forbidden." }, JsonWriteOptions)
+            return new JsonResult(new { success = false, error = "Доступ заборонено." }, JsonWriteOptions)
             {
                 StatusCode = StatusCodes.Status403Forbidden,
             };
@@ -64,7 +64,7 @@ public static class AdminSlotRoleHandlers
         if (updated == 0)
         {
             await tx.RollbackAsync();
-            return new JsonResult(new { success = false, error = "Slot is not admin-reserved or was not found." }, JsonWriteOptions)
+            return new JsonResult(new { success = false, error = "Слот не в адмін-блоці або не знайдено." }, JsonWriteOptions)
             {
                 StatusCode = StatusCodes.Status409Conflict,
             };

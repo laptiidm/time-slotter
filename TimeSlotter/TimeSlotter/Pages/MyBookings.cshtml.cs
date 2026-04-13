@@ -22,6 +22,16 @@ public class MyBookingsModel : PageModel
 
     public IReadOnlyList<MyBookingRowVm> Bookings { get; private set; } = Array.Empty<MyBookingRowVm>();
 
+    public static string SlotStatusUk(SlotStatus status) =>
+        status switch
+        {
+            SlotStatus.Available => "Доступно",
+            SlotStatus.Pending => "Очікує підтвердження",
+            SlotStatus.BookedByClient => "Зайнято",
+            SlotStatus.ReservedByAdmin => "Заблоковано",
+            _ => status.ToString(),
+        };
+
     public async Task<IActionResult> OnGetAsync()
     {
         var me = await _userManager.GetUserAsync(User);

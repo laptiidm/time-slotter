@@ -2,7 +2,7 @@
 @model TimeSlotter.Pages.AdminModel
 @using System
 @{
-    ViewData["Title"] = "Admin";
+    ViewData["Title"] = "Розклад";
     ViewData["HtmlLang"] = "uk-UA";
     var bookingSlugEscaped = Uri.EscapeDataString(Model.BookingLinkSlug);
     var initialBookingFullUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/Booking?slug={bookingSlugEscaped}&date={Model.ScheduleInitialDate}";
@@ -20,23 +20,23 @@
         <aside class="flex min-h-0 flex-col lg:h-full">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
                 <div class="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-                    <header class="flex min-w-0 items-center gap-2" title="Signed in">
+                    <header class="flex min-w-0 items-center gap-2" title="Ви увійшли">
                         <span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.55)]" aria-hidden="true"></span>
                         <p class="min-w-0 truncate text-sm font-semibold leading-tight text-slate-100">@Model.Provider.Name</p>
                     </header>
                     <div class="my-3 border-t border-slate-800/50"></div>
                     @* Text HH:mm fields: consistent 24h UX; values match TryParseHm / parseHm24. *@
-                    <section aria-label="Slot draft generator" lang="uk-UA">
-                        <h2 class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Configuration</h2>
+                    <section aria-label="Генератор слотів" lang="uk-UA">
+                        <h2 class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Генератор слотів</h2>
                         <form id="slotDraftForm" method="post" asp-page-handler="Save" class="space-y-4" novalidate>
                             <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                                 <div class="min-w-0">
-                                    <label for="targetDate" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Target date</label>
+                                    <label for="targetDate" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Дата</label>
                                     <input id="targetDate" type="date" required value="@Model.ScheduleInitialDate"
                                            class="block min-h-[2.25rem] w-full rounded-md border-0 bg-slate-800 py-1.5 px-2 text-xs text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
                                 </div>
                                 <div class="min-w-0">
-                                    <label for="startTime" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Start</label>
+                                    <label for="startTime" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Початок</label>
                                     <input id="startTime" type="text" value="09:00" required maxlength="5"
                                            inputmode="numeric" placeholder="HH:mm" pattern="[0-9]{2}:[0-9]{2}"
                                            autocomplete="off" spellcheck="false"
@@ -45,7 +45,7 @@
                                            class="time-mask-input block min-h-[2.25rem] w-full min-w-0 rounded-md border-0 bg-slate-800 py-1.5 px-2 font-mono text-xs tabular-nums text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
                                 </div>
                                 <div class="min-w-0">
-                                    <label for="endTime" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">End</label>
+                                    <label for="endTime" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Кінець</label>
                                     <input id="endTime" type="text" value="17:00" required maxlength="5"
                                            inputmode="numeric" placeholder="HH:mm" pattern="[0-9]{2}:[0-9]{2}"
                                            autocomplete="off" spellcheck="false"
@@ -58,36 +58,36 @@
 
                             <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-[2fr_1fr]">
                                 <div class="min-w-0">
-                                    <label for="strategy" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Strategy</label>
+                                    <label for="strategy" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Стратегія</label>
                                     <select id="strategy"
                                             class="block min-h-[2.25rem] w-full min-w-0 rounded-md border-0 bg-slate-800 py-1.5 px-2 text-xs text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500">
-                                        <option value="interval">Fixed interval (minutes per slot)</option>
-                                        <option value="equal">Equal split (number of slots)</option>
+                                        <option value="interval">Фіксований інтервал (хв на слот)</option>
+                                        <option value="equal">Рівні частини (кількість слотів)</option>
                                     </select>
                                 </div>
                                 <div class="min-w-0">
                                     <label for="generationValue" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">
-                                        <span id="generationLabel">Interval (min)</span>
+                                        <span id="generationLabel">Інтервал (хв)</span>
                                     </label>
                                     <input id="generationValue" type="number" min="1" max="480" step="1" value="60" required inputmode="numeric"
                                            class="block min-h-[2.25rem] w-full rounded-md border-0 bg-slate-800 py-1.5 px-2 text-xs text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
                                 </div>
                             </div>
-                            <p class="text-[10px] leading-tight text-slate-500" id="strategyHelp">Each slot will be this many minutes long, placed back-to-back from start until end.</p>
+                            <p class="text-[10px] leading-tight text-slate-500" id="strategyHelp">Кожен слот триває стільки хвилин і йде підряд від початку до кінця вікна.</p>
 
                             <div class="border-t border-slate-800/50 pt-3">
                             <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                                 <button type="button" id="generatePreviewBtn"
                                         class="min-h-[2.25rem] w-full min-w-0 rounded-lg bg-blue-600 px-2 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
-                                    Preview
+                                    Попередній перегляд
                                 </button>
                                 <button type="submit" id="saveDraftBtn" disabled
                                         class="min-h-[2.25rem] w-full min-w-0 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-600">
-                                    Save
+                                    Зберегти
                                 </button>
                                 <button type="button" id="clearDayBtn" disabled
                                         class="min-h-[2.25rem] w-full min-w-0 rounded-lg border border-red-500/50 bg-red-950/40 px-2 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-950/60 focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800/50 disabled:text-slate-600">
-                                    Clear
+                                    Очистити день
                                 </button>
                             </div>
                             </div>
@@ -97,7 +97,7 @@
             </div>
         </aside>
 
-        <section id="adminTimelineSection" class="flex min-h-0 flex-1 flex-col lg:min-h-0 lg:h-full transition-[box-shadow] duration-300" aria-label="Schedule timeline">
+        <section id="adminTimelineSection" class="flex min-h-0 flex-1 flex-col lg:min-h-0 lg:h-full transition-[box-shadow] duration-300" aria-label="Розклад на день">
             <div id="adminTimelinePanel" class="flex min-h-0 min-h-[min(100%,calc(100vh-5rem))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5 transition-[box-shadow,ring-color] duration-300" data-booking-slug="@Model.BookingLinkSlug">
                 <input id="permanentBookingLinkInput" type="text" readonly tabindex="-1"
                        value="@initialBookingFullUrl"
@@ -111,21 +111,21 @@
                     <div class="flex min-w-0 flex-wrap items-center gap-2">
                         <button type="button" id="publicBookingLinkBtn" disabled
                                 class="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1.5 rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600/80 disabled:hover:bg-transparent"
-                                title="Copy booking link for the target date (saved slots required)">
+                                title="Скопіювати посилання на бронювання для обраної дати (потрібні збережені слоти)">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                            <span>Public link</span>
+                            <span>Публічне посилання</span>
                         </button>
-                        <span id="permanentBookingCopyFeedback" class="hidden text-[10px] font-medium text-emerald-400" role="status">Copied</span>
+                        <span id="permanentBookingCopyFeedback" class="hidden text-[10px] font-medium text-emerald-400" role="status">Скопійовано!</span>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <span id="timelineCountBadge" class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-400">0</span>
                         <button type="button" id="scheduleRefreshBtn"
                                 class="min-h-[2.25rem] rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
-                            Refresh
+                            Оновити
                         </button>
                         <button type="button" id="clearAllBtn" disabled
                                 class="min-h-[2.25rem] rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
-                            Clear draft
+                            Очистити чернетку
                         </button>
                         <button type="button" id="adminGroupingToggleBtn" disabled
                                 class="min-h-[2.25rem] rounded-lg border border-indigo-500/40 bg-indigo-950/40 px-3 py-1.5 text-xs font-medium text-indigo-200 transition hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-indigo-950/40">
@@ -133,13 +133,13 @@
                         </button>
                     </div>
                 </div>
-                <p class="mb-2 shrink-0 text-xs text-slate-500">One chronological list for the target date. Polls every 30s.</p>
+                <p class="mb-2 shrink-0 text-xs text-slate-500">Один список на обрану дату; автооновлення кожні 30 с.</p>
                 <p id="scheduleHint" class="mb-3 hidden shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200" role="status"></p>
                 <div id="draftValidationWarning" class="mb-3 hidden shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" role="alert"></div>
                 <input type="hidden" name="FinalSlotsJson" id="finalSlotsJson" value="" form="slotDraftForm"/>
 
                 <div id="timelineEmptyState" class="flex min-h-0 flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-950/30 p-6 text-center">
-                    <p class="text-sm text-slate-500">No slots for this date. Use <span class="text-slate-400">Generate preview</span> or load saved slots.</p>
+                    <p class="text-sm text-slate-500">Немає слотів на цю дату. Натисніть <span class="text-slate-400">«Попередній перегляд»</span> або оновіть збережені слоти.</p>
                 </div>
                 <div id="unifiedTimeline" class="hidden min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto overflow-x-hidden pr-1"></div>
             </div>
@@ -618,9 +618,9 @@
 
                 if (blocked) {
                     if (hasExistingScheduleConflict()) {
-                        showValidation('Conflict detected in schedule!');
+                        showValidation('Конфлікт зі збереженим розкладом!');
                     } else if (hasDraftDraftIssues()) {
-                        showValidation('Fix overlapping or invalid draft times before saving.');
+                        showValidation('Виправте накладання або некоректний час чернетки перед збереженням.');
                     }
                 } else {
                     hideValidation();
@@ -956,9 +956,9 @@
                             ? 'border-amber-400/60 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
                             : 'border-slate-600/80 bg-slate-800/80 text-slate-400 hover:border-slate-500 hover:text-slate-200');
                     shieldBtn.title = row.requiresApproval === true
-                        ? 'Підтвердження: увімкнено (натисніть щоб вимкнути)'
-                        : 'Підтвердження: вимкнено (натисніть щоб увімкнути)';
-                    shieldBtn.setAttribute('aria-label', 'Підтвердження бронювання');
+                        ? 'Потребує підтвердження: увімкнено (натисніть, щоб вимкнути)'
+                        : 'Потребує підтвердження: вимкнено (натисніть, щоб увімкнути)';
+                    shieldBtn.setAttribute('aria-label', 'Потребує підтвердження');
                     shieldBtn.innerHTML = '<span class="inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg><span>Підтв.</span></span>';
                     shieldBtn.addEventListener('click', function (ev) {
                         ev.stopPropagation();
@@ -972,7 +972,7 @@
                 if (code === 0 && row.requiresApproval === true) {
                     var needBadge = document.createElement('p');
                     needBadge.className = 'mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200/90';
-                    needBadge.textContent = 'На перевірку після заявки';
+                    needBadge.textContent = 'Потребує підтвердження';
                     wrap.appendChild(needBadge);
                 }
 
@@ -990,7 +990,7 @@
                 if (code === 2) {
                     const lbl = document.createElement('p');
                     lbl.className = 'mb-1 text-xs font-semibold uppercase tracking-wide text-amber-200/90';
-                    lbl.textContent = 'Booked by Client';
+                    lbl.textContent = 'Зайнято (клієнт)';
                     wrap.appendChild(lbl);
                     const det = document.createElement('p');
                     det.className = 'mb-2 text-xs text-amber-100/80';
@@ -1019,15 +1019,15 @@
                         const assignBtn = document.createElement('button');
                         assignBtn.type = 'button';
                         assignBtn.className = 'rounded-lg border border-indigo-400/55 bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-100 hover:bg-indigo-600/35';
-                        assignBtn.innerHTML = '<span class="inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path stroke-linecap="round" d="M20 8v6M23 11h-6"/></svg>Assign</span>';
-                        assignBtn.title = 'Book walk-in / phone customer';
+                        assignBtn.innerHTML = '<span class="inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path stroke-linecap="round" d="M20 8v6M23 11h-6"/></svg>Призначити</span>';
+                        assignBtn.title = 'Призначити клієнта (ім’я та телефон)';
                         assignBtn.addEventListener('click', function () { assignSlot(row.id); });
                         actions.appendChild(assignBtn);
 
                         const btn = document.createElement('button');
                         btn.type = 'button';
                         btn.className = 'rounded-lg border border-blue-400/60 bg-blue-600/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600/40';
-                        btn.textContent = 'Block';
+                        btn.textContent = 'Блок';
                         btn.addEventListener('click', function () {
                             toggleStatus(row.id);
                         });
@@ -1046,7 +1046,7 @@
                         const btn = document.createElement('button');
                         btn.type = 'button';
                         btn.className = 'rounded-lg border border-slate-600 bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600/60';
-                        btn.textContent = 'Unblock';
+                        btn.textContent = 'Розблок';
                         btn.addEventListener('click', function () {
                             toggleStatus(row.id);
                         });
@@ -1057,7 +1057,7 @@
                         const delBtn = document.createElement('button');
                         delBtn.type = 'button';
                         delBtn.className = 'ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/15 hover:text-red-300';
-                        delBtn.innerHTML = '<span aria-hidden="true" class="text-base leading-none">\u00D7</span> Delete';
+                        delBtn.innerHTML = '<span aria-hidden="true" class="text-base leading-none">\u00D7</span> Видалити';
                         delBtn.setAttribute('onclick', 'window.deleteSavedSlot(' + row.id + '); return false;');
                         actions.appendChild(delBtn);
                     }
@@ -1095,13 +1095,13 @@
                     const confirmBtn = document.createElement('button');
                     confirmBtn.type = 'button';
                     confirmBtn.className = 'rounded-md bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500';
-                    confirmBtn.textContent = 'Confirm';
+                    confirmBtn.textContent = 'Підтвердити';
                     confirmBtn.addEventListener('click', function () { submitAssignment(row.id); });
 
                     const cancelBtn = document.createElement('button');
                     cancelBtn.type = 'button';
                     cancelBtn.className = 'rounded-md border border-slate-600 bg-transparent px-2.5 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-800/80';
-                    cancelBtn.textContent = 'Cancel';
+                    cancelBtn.textContent = 'Скасувати';
                     cancelBtn.addEventListener('click', function () { cancelProxyAssign(row.id); });
 
                     btnRow.appendChild(confirmBtn);
@@ -1139,7 +1139,7 @@
                 topRow.className = 'mb-2 flex items-center justify-between gap-2';
                 const badgeKind = document.createElement('span');
                 badgeKind.className = 'rounded-md bg-green-600/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-200';
-                badgeKind.textContent = 'Draft';
+                badgeKind.textContent = 'Чернетка';
                 const badgeDur = document.createElement('span');
                 badgeDur.className = 'rounded-full border border-green-600/40 bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-green-100';
                 badgeDur.textContent = formatDurationBadge(slot.startTime, slot.endTime);
@@ -1152,7 +1152,7 @@
                 const startLab = document.createElement('label');
                 startLab.className = 'sr-only';
                 startLab.htmlFor = 'st-' + slot.id;
-                startLab.textContent = 'Start';
+                startLab.textContent = 'Початок';
                 const startIn = document.createElement('input');
                 startIn.type = 'time';
                 startIn.step = '60';
@@ -1163,7 +1163,7 @@
                 const endLab = document.createElement('label');
                 endLab.className = 'sr-only';
                 endLab.htmlFor = 'en-' + slot.id;
-                endLab.textContent = 'End';
+                endLab.textContent = 'Кінець';
                 const endIn = document.createElement('input');
                 endIn.type = 'time';
                 endIn.step = '60';
@@ -1173,7 +1173,7 @@
 
                 const res = document.createElement('input');
                 res.type = 'text';
-                res.placeholder = 'Room / context';
+                res.placeholder = 'Кімната / контекст';
                 res.value = slot.resourceContext || '';
                 res.className = 'min-w-[6rem] flex-1 rounded-md border-0 bg-slate-800/80 py-1 px-2 text-xs text-white placeholder-slate-500 ring-1 ring-inset ring-green-900/40 focus:ring-2 focus:ring-green-500';
                 res.addEventListener('change', function () {
@@ -1185,7 +1185,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.type = 'button';
                 removeBtn.className = 'shrink-0 rounded-lg border border-green-600/50 bg-green-600/20 px-3 py-1.5 text-xs font-medium text-green-100 hover:bg-green-600/30';
-                removeBtn.textContent = 'Remove';
+                removeBtn.textContent = 'Прибрати';
                 removeBtn.addEventListener('click', function () {
                     window.draftSlots = window.draftSlots.filter(function (x) { return x.id !== slot.id; });
                     renderSlots();
@@ -1342,7 +1342,7 @@
                     if (!res.ok || !data.success) {
                         syncRowStatusFromCode(row, prev);
                         renderSlots();
-                        showScheduleHint(data.error || ('Could not update slot (' + res.status + ')'));
+                        showScheduleHint(data.error || ('Не вдалося оновити слот (' + res.status + ')'));
                         return;
                     }
                     if (typeof data.newStatus === 'number') {
@@ -1423,7 +1423,7 @@
                     try { data = await res.json(); } catch (e) { /* ignore */ }
                     if (!res.ok || !data.success) {
                         if (el) el.style.opacity = '1';
-                        showScheduleHint(data.error || 'Could not delete slot.');
+                        showScheduleHint(data.error || 'Не вдалося видалити слот.');
                         return;
                     }
                     hideScheduleHint();
@@ -1432,7 +1432,7 @@
                     else refresh();
                 } catch (e) {
                     if (el) el.style.opacity = '1';
-                    showScheduleHint('Network error while deleting.');
+                    showScheduleHint('Помилка мережі під час видалення.');
                 }
             }
             window.deleteSavedSlot = deleteSavedSlot;
@@ -1460,7 +1460,7 @@
                     var data = {};
                     try { data = await res.json(); } catch (e2) { /* ignore */ }
                     if (!res.ok || !data.success) {
-                        showScheduleHint(data.error || 'Could not clear day.');
+                        showScheduleHint(data.error || 'Не вдалося очистити день.');
                         closeClearDayModal();
                         return;
                     }
@@ -1468,7 +1468,7 @@
                     closeClearDayModal();
                     await fetchExistingSnapshots();
                 } catch (e3) {
-                    showScheduleHint('Network error while clearing day.');
+                    showScheduleHint('Помилка мережі під час очищення дня.');
                     closeClearDayModal();
                 }
             }
@@ -1504,7 +1504,7 @@
                     hideScheduleHint();
                     renderSlots();
                 } catch (e) {
-                    showScheduleHint('Could not refresh saved slots. Check your connection or use Refresh.');
+                    showScheduleHint('Не вдалося оновити збережені слоти. Перевірте з’єднання або натисніть «Оновити».');
                 }
             }
 
@@ -1519,7 +1519,7 @@
                 var ymd = targetDate && targetDate.value;
                 var savedForDay = (window.existingSlots || []).filter(function (r) { return r.date === ymd && r.id > 0; }).length;
                 var draftForDay = (window.draftSlots || []).filter(function (s) { return s.date === ymd && s.id <= 0; }).length;
-                timelineBadge.textContent = savedForDay + ' saved · ' + draftForDay + ' draft';
+                timelineBadge.textContent = savedForDay + ' збер. · ' + draftForDay + ' черн.';
 
                 if (clearDayBtn) {
                     clearDayBtn.disabled = savedForDay === 0;
@@ -1549,11 +1549,11 @@
 
             function strategyUi() {
                 const isEqual = strategy && strategy.value === 'equal';
-                if (generationLabel) generationLabel.textContent = isEqual ? 'Slots' : 'Interval (min)';
+                if (generationLabel) generationLabel.textContent = isEqual ? 'К-сть слотів' : 'Інтервал (хв)';
                 if (strategyHelp) {
                     strategyHelp.textContent = isEqual
-                        ? 'The window from start to end is split evenly into this many slots.'
-                        : 'Each slot will be this many minutes long, placed back-to-back from start until end.';
+                        ? 'Вікно від початку до кінця ділиться на рівні частини (задана кількість слотів).'
+                        : 'Кожен слот триває стільки хвилин і йде підряд від початку до кінця вікна.';
                 }
                 if (generationValue) {
                     generationValue.min = '1';
@@ -1572,7 +1572,7 @@
                 const endVal = endTimeEl?.value;
                 const genRaw = parseInt(generationValue?.value ?? '0', 10);
                 if (!dateVal || !startVal || !endVal || !Number.isFinite(genRaw) || genRaw < 1) {
-                    showValidation('Fill date, start/end (24h HH:mm), and interval or slot count.');
+                    showValidation('Заповніть дату, початок/кінець (24 год ГГ:ХХ) та інтервал або кількість слотів.');
                     return;
                 }
 
@@ -1581,11 +1581,11 @@
                 const startM = parseHm24(startTimeEl && startTimeEl.value);
                 const endM = parseHm24(endTimeEl && endTimeEl.value);
                 if (startM == null || endM == null) {
-                    showValidation('Invalid time: use 24-hour HH:mm (00:00–23:59), e.g. 09:00 or 0900.');
+                    showValidation('Некоректний час: використовуйте 24-годинний формат ГГ:ХХ (00:00–23:59), напр. 09:00 або 0900.');
                     return;
                 }
                 if (endM <= startM) {
-                    showValidation('End time must be after start time.');
+                    showValidation('Час кінця має бути пізніше за початок.');
                     return;
                 }
 
@@ -1632,15 +1632,15 @@
                 if (hasBlockingIssues()) {
                     e.preventDefault();
                     if (hasExistingScheduleConflict()) {
-                        showValidation('Conflict detected in schedule!');
+                        showValidation('Конфлікт зі збереженим розкладом!');
                     } else {
-                        showValidation('Fix overlapping or invalid draft times before saving.');
+                        showValidation('Виправте накладання або некоректний час чернетки перед збереженням.');
                     }
                     return;
                 }
 
                 if (window.draftSlots.length === 0) {
-                    if (!confirm('No draft slots to save. Submit anyway?')) {
+                    if (!confirm('Немає чернеток для збереження. Усе одно надіслати форму?')) {
                         e.preventDefault();
                         return;
                     }

@@ -1,7 +1,10 @@
 @page "/u/{slug}"
 @model TimeSlotter.Pages.UserModel
+@using System.Globalization
 @{
-    ViewData["Title"] = "User";
+    ViewData["Title"] = "Бронювання";
+    ViewData["HtmlLang"] = "uk-UA";
+    var uk = new CultureInfo("uk-UA");
 }
 
 @*
@@ -10,8 +13,8 @@
 *@
 <div class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6">
     <header class="shrink-0 pb-4">
-        <h1 class="text-2xl font-semibold tracking-tight text-white">Book a slot</h1>
-        <p class="mt-1 text-sm text-slate-400">Pick a date, then choose an available time.</p>
+        <h1 class="text-2xl font-semibold tracking-tight text-white">Забронювати слот</h1>
+        <p class="mt-1 text-sm text-slate-400">Оберіть дату, потім вільний час.</p>
     </header>
 
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
@@ -19,16 +22,16 @@
         <aside class="flex min-h-0 flex-col lg:h-full">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
                 <div class="min-h-0 flex-1 overflow-y-auto p-6">
-                    <section aria-label="Calendar preview">
+                    <section aria-label="Календар">
                         <div class="mb-4 flex items-center justify-between">
-                            <h2 class="text-sm font-medium text-slate-300">April 2026</h2>
+                            <h2 class="text-sm font-medium text-slate-300">@Model.SelectedDate.ToString("MMMM yyyy", uk)</h2>
                             <div class="flex gap-1">
                                 <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&lsaquo;</span>
                                 <span class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-400">&rsaquo;</span>
                             </div>
                         </div>
                         <div class="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Нд</span>
                         </div>
                         <div class="grid grid-cols-7 gap-1">
                             @for (var i = 0; i < 28; i++)
@@ -46,10 +49,10 @@
         </aside>
 
         @* Right: reserved for slot list — empty for now, scroll ready. *@
-        <section class="flex min-h-0 flex-col lg:h-full" aria-label="Available slots">
+        <section class="flex min-h-0 flex-col lg:h-full" aria-label="Доступні слоти">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5">
                 <div class="mb-4 flex shrink-0 items-center justify-between">
-                    <h2 class="text-sm font-medium text-slate-300">Available times</h2>
+                    <h2 class="text-sm font-medium text-slate-300">Доступний час</h2>
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
                     @if (Model.AvailableSlots.Any())
@@ -73,14 +76,14 @@
                                             }
                                         </div>
                                         <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:gap-2">
-                                            <input name="customerName" type="text" required maxlength="120" placeholder="Your name"
+                                            <input name="customerName" type="text" required maxlength="120" placeholder="Ім'я"
                                                    class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500"/>
-                                            <input name="customerPhone" type="tel" required maxlength="40" placeholder="Phone"
+                                            <input name="customerPhone" type="tel" required maxlength="40" placeholder="Телефон"
                                                    class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500"/>
                                         </div>
                                         <button type="submit"
                                                 class="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500">
-                                            Book
+                                            Забронювати
                                         </button>
                                     </form>
                                 </article>
@@ -89,7 +92,7 @@
                     }
                     else
                     {
-                        <p class="text-sm text-slate-500">No slots available for this date.</p>
+                        <p class="text-sm text-slate-500">На цю дату немає вільних слотів.</p>
                     }
                 </div>
             </div>
