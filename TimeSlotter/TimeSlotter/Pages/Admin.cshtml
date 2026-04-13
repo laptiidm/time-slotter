@@ -1,9 +1,12 @@
 @page
 @model TimeSlotter.Pages.AdminModel
+@using System
 @{
     ViewData["Title"] = "Admin";
+    ViewData["HtmlLang"] = "uk-UA";
     var bookingSlugEscaped = Uri.EscapeDataString(Model.BookingLinkSlug);
     var initialBookingFullUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/Booking?slug={bookingSlugEscaped}&date={Model.ScheduleInitialDate}";
+    var publicLinkSaveFlash = string.Equals(TempData["AdminSlotsSaved"] as string, "1", StringComparison.Ordinal);
 }
 
 @*
@@ -12,75 +15,81 @@
 <form id="adminCsrfForm" class="sr-only" aria-hidden="true">@Html.AntiForgeryToken()</form>
 <script type="application/json" id="initialExistingSlots">@Html.Raw(Model.InitialSlotsJson)</script>
 
-<div id="adminPageRoot" class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6" data-default-split-minutes="@Model.DefaultSlotIntervalMinutes">
+<div id="adminPageRoot" class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6" data-default-split-minutes="@Model.DefaultSlotIntervalMinutes" data-public-link-save-flash="@(publicLinkSaveFlash ? "1" : "0")">
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
         <aside class="flex min-h-0 flex-col lg:h-full">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
-                <div class="min-h-0 flex-1 overflow-y-auto p-6">
-                    <section aria-label="Slot draft generator">
-                        <h2 class="mb-3 text-sm font-medium text-slate-300">Slot generator</h2>
-                        <form id="slotDraftForm" method="post" asp-page-handler="Save" class="space-y-4">
-                            <div>
-                                <label for="targetDate" class="mb-1 block text-xs text-slate-500">Target date</label>
-                                <input id="targetDate" type="date" required value="@Model.ScheduleInitialDate"
-                                       class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
-                            </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label for="startTime" class="mb-1 block text-xs text-slate-500">Start time</label>
-                                    <input id="startTime" type="time" step="60" value="09:00" required
-                                           class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
+                <div class="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+                    <header class="flex min-w-0 items-center gap-2" title="Signed in">
+                        <span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.55)]" aria-hidden="true"></span>
+                        <p class="min-w-0 truncate text-sm font-semibold leading-tight text-slate-100">@Model.Provider.Name</p>
+                    </header>
+                    <div class="my-3 border-t border-slate-800/50"></div>
+                    @* Text HH:mm fields: consistent 24h UX; values match TryParseHm / parseHm24. *@
+                    <section aria-label="Slot draft generator" lang="uk-UA">
+                        <h2 class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Configuration</h2>
+                        <form id="slotDraftForm" method="post" asp-page-handler="Save" class="space-y-4" novalidate>
+                            <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                <div class="min-w-0">
+                                    <label for="targetDate" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Target date</label>
+                                    <input id="targetDate" type="date" required value="@Model.ScheduleInitialDate"
+                                           class="block min-h-[2.25rem] w-full rounded-md border-0 bg-slate-800 py-1.5 px-2 text-xs text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
                                 </div>
-                                <div>
-                                    <label for="endTime" class="mb-1 block text-xs text-slate-500">End time</label>
-                                    <input id="endTime" type="time" step="60" value="17:00" required
-                                           class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
+                                <div class="min-w-0">
+                                    <label for="startTime" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Start</label>
+                                    <input id="startTime" type="text" value="09:00" required maxlength="5"
+                                           inputmode="numeric" placeholder="HH:mm" pattern="[0-9]{2}:[0-9]{2}"
+                                           autocomplete="off" spellcheck="false"
+                                           aria-describedby="slotGenTimeFormatHint"
+                                           title="24-годинний час ГГ:ХХ (можна ввести 0900)"
+                                           class="time-mask-input block min-h-[2.25rem] w-full min-w-0 rounded-md border-0 bg-slate-800 py-1.5 px-2 font-mono text-xs tabular-nums text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
+                                </div>
+                                <div class="min-w-0">
+                                    <label for="endTime" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">End</label>
+                                    <input id="endTime" type="text" value="17:00" required maxlength="5"
+                                           inputmode="numeric" placeholder="HH:mm" pattern="[0-9]{2}:[0-9]{2}"
+                                           autocomplete="off" spellcheck="false"
+                                           aria-describedby="slotGenTimeFormatHint"
+                                           title="24-годинний час ГГ:ХХ (можна ввести 0900)"
+                                           class="time-mask-input block min-h-[2.25rem] w-full min-w-0 rounded-md border-0 bg-slate-800 py-1.5 px-2 font-mono text-xs tabular-nums text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
                                 </div>
                             </div>
-                            <div>
-                                <label for="strategy" class="mb-1 block text-xs text-slate-500">Strategy</label>
-                                <select id="strategy"
-                                        class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6">
-                                    <option value="interval">Fixed interval (minutes per slot)</option>
-                                    <option value="equal">Equal split (number of slots)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="generationValue" class="mb-1 block text-xs text-slate-500">
-                                    <span id="generationLabel">Interval (minutes)</span>
-                                </label>
-                                <input id="generationValue" type="number" min="1" max="480" value="60" required
-                                       class="block w-full rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:leading-6"/>
-                            </div>
-                            <p class="text-xs text-slate-500" id="strategyHelp">Each slot will be this many minutes long, placed back-to-back from start until end.</p>
+                            <p id="slotGenTimeFormatHint" class="sr-only">Час у 24-годинному форматі; значення поля у вигляді ГГ:ХХ.</p>
 
-                            <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 ring-1 ring-inset ring-slate-800/60">
-                                <label for="defaultSplitIntervalInput" class="mb-1 block text-xs text-slate-500">Розбиття згрупованих слотів (хв)</label>
-                                <div class="flex flex-wrap items-stretch gap-2">
-                                    <input id="defaultSplitIntervalInput" type="number" min="5" max="480" value="@Model.DefaultSlotIntervalMinutes"
-                                           class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 pl-3 pr-3 text-sm text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:leading-6"/>
-                                    <button type="button" id="saveDefaultSplitIntervalBtn"
-                                            class="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-600/20 px-3 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-600/35">
-                                        Зберегти
-                                    </button>
+                            <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-[2fr_1fr]">
+                                <div class="min-w-0">
+                                    <label for="strategy" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">Strategy</label>
+                                    <select id="strategy"
+                                            class="block min-h-[2.25rem] w-full min-w-0 rounded-md border-0 bg-slate-800 py-1.5 px-2 text-xs text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500">
+                                        <option value="interval">Fixed interval (minutes per slot)</option>
+                                        <option value="equal">Equal split (number of slots)</option>
+                                    </select>
                                 </div>
-                                <p class="mt-1.5 text-[11px] leading-snug text-slate-600">Використовується при «Розгрупувати» для об’єднаних слотів.</p>
+                                <div class="min-w-0">
+                                    <label for="generationValue" class="mb-[5px] block text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-500">
+                                        <span id="generationLabel">Interval (min)</span>
+                                    </label>
+                                    <input id="generationValue" type="number" min="1" max="480" step="1" value="60" required inputmode="numeric"
+                                           class="block min-h-[2.25rem] w-full rounded-md border-0 bg-slate-800 py-1.5 px-2 text-xs text-white shadow-sm ring-1 ring-inset ring-slate-700 focus:ring-2 focus:ring-inset focus:ring-blue-500"/>
+                                </div>
                             </div>
+                            <p class="text-[10px] leading-tight text-slate-500" id="strategyHelp">Each slot will be this many minutes long, placed back-to-back from start until end.</p>
 
-                            <button type="button" id="generatePreviewBtn"
-                                    class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
-                                Generate preview
-                            </button>
-
-                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                <button type="submit" id="saveDraftBtn"
-                                        class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-45 sm:col-span-2">
-                                    Save to database
+                            <div class="border-t border-slate-800/50 pt-3">
+                            <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                <button type="button" id="generatePreviewBtn"
+                                        class="min-h-[2.25rem] w-full min-w-0 rounded-lg bg-blue-600 px-2 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+                                    Preview
+                                </button>
+                                <button type="submit" id="saveDraftBtn" disabled
+                                        class="min-h-[2.25rem] w-full min-w-0 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-600">
+                                    Save
                                 </button>
                                 <button type="button" id="clearDayBtn" disabled
-                                        class="w-full rounded-lg border border-red-500/50 bg-red-950/40 px-4 py-2.5 text-sm font-medium text-red-300 transition hover:bg-red-950/60 focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800/50 disabled:text-slate-600 sm:col-span-2">
-                                    Очистити день
+                                        class="min-h-[2.25rem] w-full min-w-0 rounded-lg border border-red-500/50 bg-red-950/40 px-2 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-950/60 focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800/50 disabled:text-slate-600">
+                                    Clear
                                 </button>
+                            </div>
                             </div>
                         </form>
                     </section>
@@ -89,40 +98,37 @@
         </aside>
 
         <section id="adminTimelineSection" class="flex min-h-0 flex-1 flex-col lg:min-h-0 lg:h-full transition-[box-shadow] duration-300" aria-label="Schedule timeline">
-            <div id="adminTimelinePanel" class="flex min-h-0 min-h-[min(100%,calc(100vh-5rem))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5 transition-[box-shadow,ring-color] duration-300">
-                <div id="adminPermanentBookingCard" class="mb-4 shrink-0 rounded-xl border border-slate-700 bg-slate-800/50 p-4 ring-1 ring-white/5" data-booking-slug="@Model.BookingLinkSlug">
-                    <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Посилання для бронювання</h3>
-                    <p class="mt-1 text-[11px] leading-snug text-slate-500">Публічне посилання для обраної дати (як у полі Target date). Оновлюється автоматично.</p>
-                    @if (string.IsNullOrEmpty(Model.BookingLinkSlug))
-                    {
-                        <p class="mt-2 text-xs text-amber-200/90">Додайте slug профілю, щоб посилання працювало для клієнтів.</p>
-                    }
-                    <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                        <input id="permanentBookingLinkInput" type="text" readonly
-                               value="@initialBookingFullUrl"
-                               class="min-w-0 flex-1 cursor-text select-all rounded-lg border border-slate-600 bg-slate-950/80 px-3 py-2 font-mono text-xs text-slate-200 shadow-inner ring-0 placeholder:text-slate-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                               autocomplete="off" spellcheck="false" aria-label="Повне посилання для бронювання"/>
-                        <button type="button" id="permanentBookingCopyBtn"
-                                class="shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 sm:self-center">
-                            Копіювати
+            <div id="adminTimelinePanel" class="flex min-h-0 min-h-[min(100%,calc(100vh-5rem))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg shadow-black/20 ring-1 ring-white/5 transition-[box-shadow,ring-color] duration-300" data-booking-slug="@Model.BookingLinkSlug">
+                <input id="permanentBookingLinkInput" type="text" readonly tabindex="-1"
+                       value="@initialBookingFullUrl"
+                       class="sr-only"
+                       autocomplete="off" spellcheck="false" aria-hidden="true"/>
+                @if (string.IsNullOrEmpty(Model.BookingLinkSlug))
+                {
+                    <p class="mb-2 shrink-0 text-[10px] leading-snug text-amber-200/90">Додайте slug профілю в налаштуваннях, щоб публічне посилання працювало.</p>
+                }
+                <div class="mb-3 flex min-h-[2.25rem] shrink-0 flex-wrap items-center justify-between gap-2">
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
+                        <button type="button" id="publicBookingLinkBtn" disabled
+                                class="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1.5 rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600/80 disabled:hover:bg-transparent"
+                                title="Copy booking link for the target date (saved slots required)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                            <span>Public link</span>
                         </button>
+                        <span id="permanentBookingCopyFeedback" class="hidden text-[10px] font-medium text-emerald-400" role="status">Copied</span>
                     </div>
-                    <p id="permanentBookingCopyFeedback" class="mt-2 hidden text-xs font-medium text-green-400" role="status">✅ Copied!</p>
-                </div>
-                <div class="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-                    <h2 class="text-sm font-medium text-slate-300">Schedule timeline</h2>
                     <div class="flex flex-wrap items-center gap-2">
                         <span id="timelineCountBadge" class="rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-400">0</span>
                         <button type="button" id="scheduleRefreshBtn"
-                                class="rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                                class="min-h-[2.25rem] rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
                             Refresh
                         </button>
-                        <button type="button" id="clearAllBtn"
-                                class="rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                        <button type="button" id="clearAllBtn" disabled
+                                class="min-h-[2.25rem] rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
                             Clear draft
                         </button>
-                        <button type="button" id="adminGroupingToggleBtn"
-                                class="rounded-lg border border-indigo-500/40 bg-indigo-950/40 px-3 py-1.5 text-xs font-medium text-indigo-200 transition hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+                        <button type="button" id="adminGroupingToggleBtn" disabled
+                                class="min-h-[2.25rem] rounded-lg border border-indigo-500/40 bg-indigo-950/40 px-3 py-1.5 text-xs font-medium text-indigo-200 transition hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-indigo-950/40">
                             Групувати
                         </button>
                     </div>
@@ -178,6 +184,25 @@
     </div>
 </div>
 
+<div id="splitIntervalModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]" aria-hidden="true" aria-labelledby="splitIntervalModalTitle" role="dialog">
+    <div class="w-full max-w-md rounded-2xl border border-violet-500/30 bg-slate-900 p-5 shadow-2xl ring-1 ring-violet-500/20">
+        <h3 id="splitIntervalModalTitle" class="mb-3 text-base font-semibold text-white">Розгрупувати слот</h3>
+        <label for="splitIntervalModalInput" class="mb-1.5 block text-sm text-slate-400">Введіть інтервал для розбиття (хв):</label>
+        <input id="splitIntervalModalInput" type="number" min="5" max="480" step="1" inputmode="numeric"
+               class="mb-5 block w-full rounded-lg border-0 bg-slate-800 py-2 pl-3 pr-3 text-sm text-white ring-1 ring-inset ring-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50"/>
+        <div class="flex flex-wrap justify-end gap-2">
+            <button type="button" id="splitIntervalModalCancel"
+                    class="rounded-lg border border-slate-600 bg-transparent px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800">
+                Скасувати
+            </button>
+            <button type="button" id="splitIntervalModalConfirm"
+                    class="rounded-lg border border-violet-500/50 bg-violet-600/25 px-4 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-600/40">
+                Розбити
+            </button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         (function () {
@@ -212,9 +237,8 @@
             const scheduleHint = document.getElementById('scheduleHint');
             const csrfForm = document.getElementById('adminCsrfForm');
             const initialEl = document.getElementById('initialExistingSlots');
-            const permanentBookingCard = document.getElementById('adminPermanentBookingCard');
             const permanentBookingInput = document.getElementById('permanentBookingLinkInput');
-            const permanentBookingCopyBtn = document.getElementById('permanentBookingCopyBtn');
+            const publicBookingLinkBtn = document.getElementById('publicBookingLinkBtn');
             const permanentBookingCopyFeedback = document.getElementById('permanentBookingCopyFeedback');
             const adminGroupingToggleBtn = document.getElementById('adminGroupingToggleBtn');
             const adminGroupingBar = document.getElementById('adminGroupingBar');
@@ -224,10 +248,14 @@
             const adminGroupingCount = document.getElementById('adminGroupingCount');
             const adminTimelinePanel = document.getElementById('adminTimelinePanel');
             const adminPageRoot = document.getElementById('adminPageRoot');
-            const defaultSplitIntervalInput = document.getElementById('defaultSplitIntervalInput');
-            const saveDefaultSplitIntervalBtn = document.getElementById('saveDefaultSplitIntervalBtn');
+            const splitIntervalModal = document.getElementById('splitIntervalModal');
+            const splitIntervalModalInput = document.getElementById('splitIntervalModalInput');
+            const splitIntervalModalCancel = document.getElementById('splitIntervalModalCancel');
+            const splitIntervalModalConfirm = document.getElementById('splitIntervalModalConfirm');
 
             let pollTimer = null;
+            var pendingSplitSlotId = null;
+            var splitModalKeydownHandler = null;
             var groupingMode = false;
             var selectedSlotIdsForMerge = [];
 
@@ -247,9 +275,40 @@
                 return Math.max(5, Math.min(480, v));
             }
 
-            function setDefaultSplitMinutesOnPage(mins) {
-                if (adminPageRoot) adminPageRoot.setAttribute('data-default-split-minutes', String(mins));
-                if (defaultSplitIntervalInput) defaultSplitIntervalInput.value = String(mins);
+            function openSplitIntervalModal(slotId) {
+                pendingSplitSlotId = slotId;
+                if (splitIntervalModalInput) splitIntervalModalInput.value = String(getDefaultSplitMinutes());
+                if (splitIntervalModal) {
+                    splitIntervalModal.classList.remove('hidden');
+                    splitIntervalModal.classList.add('flex');
+                    splitIntervalModal.setAttribute('aria-hidden', 'false');
+                }
+                if (splitModalKeydownHandler) {
+                    document.removeEventListener('keydown', splitModalKeydownHandler);
+                }
+                splitModalKeydownHandler = function (ev) {
+                    if (ev.key === 'Escape') closeSplitIntervalModal();
+                };
+                document.addEventListener('keydown', splitModalKeydownHandler);
+                window.setTimeout(function () {
+                    if (splitIntervalModalInput) {
+                        splitIntervalModalInput.focus();
+                        splitIntervalModalInput.select();
+                    }
+                }, 0);
+            }
+
+            function closeSplitIntervalModal() {
+                pendingSplitSlotId = null;
+                if (splitIntervalModal) {
+                    splitIntervalModal.classList.add('hidden');
+                    splitIntervalModal.classList.remove('flex');
+                    splitIntervalModal.setAttribute('aria-hidden', 'true');
+                }
+                if (splitModalKeydownHandler) {
+                    document.removeEventListener('keydown', splitModalKeydownHandler);
+                    splitModalKeydownHandler = null;
+                }
             }
 
             function exitGroupingMode() {
@@ -313,7 +372,7 @@
             if (targetDate && !targetDate.value) targetDate.value = todayYmd();
 
             function getBookingSlugForUrl() {
-                return (permanentBookingCard && permanentBookingCard.getAttribute('data-booking-slug')) || '';
+                return (adminTimelinePanel && adminTimelinePanel.getAttribute('data-booking-slug')) || '';
             }
 
             function updatePermanentBookingLink() {
@@ -322,6 +381,17 @@
                 var ymd = targetDate.value || '';
                 if (!ymd) return;
                 permanentBookingInput.value = window.location.origin + '/Booking?slug=' + encodeURIComponent(slug) + '&date=' + encodeURIComponent(ymd);
+            }
+
+            /* Tailwind-only: 2s pulse after successful server save (see TempData + data-public-link-save-flash). */
+            function pulsePublicLinkAfterSave() {
+                var btn = publicBookingLinkBtn;
+                if (!btn || btn.disabled) return;
+                btn.classList.add('animate-pulse', 'ring-2', 'ring-emerald-400/50', 'ring-offset-2', 'ring-offset-slate-900');
+                window.clearTimeout(pulsePublicLinkAfterSave._t);
+                pulsePublicLinkAfterSave._t = window.setTimeout(function () {
+                    btn.classList.remove('animate-pulse', 'ring-2', 'ring-emerald-400/50', 'ring-offset-2', 'ring-offset-slate-900');
+                }, 2000);
             }
 
             function showPermanentBookingCopied() {
@@ -356,13 +426,64 @@
                 }
             }
 
-            permanentBookingCopyBtn?.addEventListener('click', copyPermanentBookingLink);
+            publicBookingLinkBtn?.addEventListener('click', copyPermanentBookingLink);
             updatePermanentBookingLink();
 
+            /* parseHm24: time string (HH:mm or HH:mm:ss) -> minutes from midnight, or null if invalid */
+            function parseHm24(str) {
+                var s = String(str || '').trim();
+                if (!s) return null;
+                var parts = s.split(':');
+                if (parts.length < 2) return null;
+                var h = parseInt(parts[0], 10);
+                var mi = parseInt(parts[1], 10);
+                if (!Number.isFinite(h) || !Number.isFinite(mi)) return null;
+                if (h < 0 || h > 23 || mi < 0 || mi > 59) return null;
+                return h * 60 + mi;
+            }
+
+            /* Digits-only mask: up to 4 digits → HH:mm (e.g. 0900 → 09:00). */
+            function applyTimeMaskInput(el) {
+                if (!el) return;
+                var d = String(el.value || '').replace(/\D/g, '').slice(0, 4);
+                var next = d.length <= 2 ? d : d.slice(0, 2) + ':' + d.slice(2);
+                if (el.value !== next) el.value = next;
+            }
+
+            /* On blur: normalize valid 24h to HH:mm; accept compact HHmm. */
+            function normalizeTime24Blur(el) {
+                if (!el) return;
+                var v = String(el.value || '').trim();
+                if (!v) return;
+                var t = parseHm24(v);
+                if (t != null) {
+                    el.value = minutesToHm(t);
+                    return;
+                }
+                var d = v.replace(/\D/g, '');
+                if (d.length === 4) {
+                    var h = parseInt(d.slice(0, 2), 10);
+                    var m = parseInt(d.slice(2), 10);
+                    if (Number.isFinite(h) && Number.isFinite(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+                        el.value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                    }
+                }
+            }
+
+            function wireTimeMaskInputs() {
+                document.querySelectorAll('.time-mask-input').forEach(function (el) {
+                    el.addEventListener('input', function () {
+                        applyTimeMaskInput(el);
+                        hideValidation();
+                    });
+                    el.addEventListener('blur', function () { normalizeTime24Blur(el); });
+                });
+            }
+
             function hmToMinutes(hm) {
-                if (!hm) return 0;
-                const p = String(hm).split(':');
-                return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+                if (hm == null || String(hm).trim() === '') return 0;
+                var t = parseHm24(hm);
+                return t == null ? NaN : t;
             }
 
             function minutesToHm(mins) {
@@ -372,7 +493,10 @@
             }
 
             function durationMinutes(s, e) {
-                return Math.max(0, hmToMinutes(e) - hmToMinutes(s));
+                var a = hmToMinutes(s);
+                var b = hmToMinutes(e);
+                if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+                return Math.max(0, b - a);
             }
 
             function formatDurationBadge(s, e) {
@@ -457,14 +581,46 @@
             }
 
             function updateSaveButtonAndWarnings() {
+                var ymd = targetDate && targetDate.value;
                 var blocked = hasBlockingIssues();
-                if (saveBtn) {
-                    saveBtn.disabled = blocked;
+                var draftForDay = (window.draftSlots || []).filter(function (s) { return s.date === ymd && s.id <= 0; }).length;
+                var savedForDay = (window.existingSlots || []).filter(function (r) { return r.date === ymd && r.id > 0; }).length;
+                var availableForGroup = 0;
+                (window.existingSlots || []).forEach(function (r) {
+                    normalizeRow(r);
+                    if (r.date === ymd && r.id > 0 && r.statusCode === 0) availableForGroup++;
+                });
+
+                if (groupingMode && availableForGroup === 0) {
+                    window.setTimeout(function () { exitGroupingMode(); }, 0);
                 }
-                if (hasExistingScheduleConflict()) {
-                    showValidation('Conflict detected in schedule!');
-                } else if (hasDraftDraftIssues()) {
-                    showValidation('Fix overlapping or invalid draft times before saving.');
+
+                if (saveBtn) {
+                    saveBtn.disabled = draftForDay === 0 || blocked;
+                }
+
+                if (publicBookingLinkBtn) {
+                    publicBookingLinkBtn.disabled = savedForDay === 0;
+                }
+
+                if (clearBtn) {
+                    clearBtn.disabled = draftForDay === 0;
+                }
+
+                if (refreshBtn) {
+                    refreshBtn.disabled = !ymd;
+                }
+
+                if (adminGroupingToggleBtn) {
+                    adminGroupingToggleBtn.disabled = !groupingMode && availableForGroup === 0;
+                }
+
+                if (blocked) {
+                    if (hasExistingScheduleConflict()) {
+                        showValidation('Conflict detected in schedule!');
+                    } else if (hasDraftDraftIssues()) {
+                        showValidation('Fix overlapping or invalid draft times before saving.');
+                    }
                 } else {
                     hideValidation();
                 }
@@ -630,9 +786,13 @@
                 }
             }
 
-            async function splitSavedSlot(slotId) {
+            async function splitSavedSlot(slotId, intervalMinutes) {
+                var mins = typeof intervalMinutes === 'number' && Number.isFinite(intervalMinutes)
+                    ? Math.max(5, Math.min(480, Math.round(intervalMinutes)))
+                    : getDefaultSplitMinutes();
                 var body = new URLSearchParams();
                 body.set('slotId', String(slotId));
+                body.set('minutes', String(mins));
                 body.set('__RequestVerificationToken', getCsrfToken());
                 try {
                     var res = await fetch(adminUrl('SplitSlot'), {
@@ -818,13 +978,12 @@
                         actions.appendChild(btn);
 
                         if (row.isGrouped === true) {
-                            var splitM = getDefaultSplitMinutes();
                             var splitBtn = document.createElement('button');
                             splitBtn.type = 'button';
                             splitBtn.className = 'inline-flex items-center gap-1 rounded-lg border border-violet-400/50 bg-violet-600/15 px-2.5 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-600/30';
-                            splitBtn.title = 'Розбити на інтервали по ' + splitM + ' хв';
+                            splitBtn.title = 'Розбити згрупований слот на інтервали';
                             splitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12M8 12h12m-12 5h12M4 7h.01M4 12h.01M4 17h.01"/></svg><span>Розгрупувати</span>';
-                            splitBtn.addEventListener('click', function () { splitSavedSlot(row.id); });
+                            splitBtn.addEventListener('click', function () { openSplitIntervalModal(row.id); });
                             actions.appendChild(splitBtn);
                         }
                     } else if (code === 3) {
@@ -1239,7 +1398,7 @@
 
             function strategyUi() {
                 const isEqual = strategy && strategy.value === 'equal';
-                if (generationLabel) generationLabel.textContent = isEqual ? 'Number of slots' : 'Interval (minutes)';
+                if (generationLabel) generationLabel.textContent = isEqual ? 'Slots' : 'Interval (min)';
                 if (strategyHelp) {
                     strategyHelp.textContent = isEqual
                         ? 'The window from start to end is split evenly into this many slots.'
@@ -1248,11 +1407,13 @@
                 if (generationValue) {
                     generationValue.min = '1';
                     generationValue.max = isEqual ? String(maxSlots) : '480';
+                    generationValue.step = '1';
                     if (isEqual && parseInt(generationValue.value, 10) > maxSlots) generationValue.value = String(maxSlots);
                 }
             }
             strategy?.addEventListener('change', strategyUi);
             strategyUi();
+            wireTimeMaskInputs();
 
             function generateSlots() {
                 const dateVal = targetDate?.value;
@@ -1260,17 +1421,24 @@
                 const endVal = endTimeEl?.value;
                 const genRaw = parseInt(generationValue?.value ?? '0', 10);
                 if (!dateVal || !startVal || !endVal || !Number.isFinite(genRaw) || genRaw < 1) {
-                    alert('Please fill date, start/end times, and a valid generation value.');
+                    showValidation('Fill date, start/end (24h HH:mm), and interval or slot count.');
                     return;
                 }
 
-                const startM = hmToMinutes(startVal);
-                const endM = hmToMinutes(endVal);
+                normalizeTime24Blur(startTimeEl);
+                normalizeTime24Blur(endTimeEl);
+                const startM = parseHm24(startTimeEl && startTimeEl.value);
+                const endM = parseHm24(endTimeEl && endTimeEl.value);
+                if (startM == null || endM == null) {
+                    showValidation('Invalid time: use 24-hour HH:mm (00:00–23:59), e.g. 09:00 or 0900.');
+                    return;
+                }
                 if (endM <= startM) {
-                    alert('End time must be after start time.');
+                    showValidation('End time must be after start time.');
                     return;
                 }
 
+                hideValidation();
                 const out = [];
                 const strat = strategy?.value === 'equal' ? 'equal' : 'interval';
 
@@ -1361,35 +1529,25 @@
                 executeMergeSelection();
             });
 
-            saveDefaultSplitIntervalBtn?.addEventListener('click', async function () {
-                var raw = defaultSplitIntervalInput && parseInt(defaultSplitIntervalInput.value, 10);
-                if (!Number.isFinite(raw)) {
+            splitIntervalModalCancel?.addEventListener('click', closeSplitIntervalModal);
+            splitIntervalModal?.addEventListener('click', function (ev) {
+                if (ev.target === splitIntervalModal) closeSplitIntervalModal();
+            });
+            function confirmSplitIntervalModal() {
+                var sid = pendingSplitSlotId;
+                var raw = splitIntervalModalInput && parseInt(splitIntervalModalInput.value, 10);
+                if (sid == null || !Number.isFinite(raw)) {
                     showScheduleHint('Вкажіть коректну кількість хвилин (5–480).');
                     return;
                 }
-                var body = new URLSearchParams();
-                body.set('minutes', String(raw));
-                body.set('__RequestVerificationToken', getCsrfToken());
-                try {
-                    var res = await fetch(adminUrl('DefaultSlotInterval'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-                        body: body.toString(),
-                        credentials: 'same-origin'
-                    });
-                    var data = {};
-                    try { data = await res.json(); } catch (exD) { /* ignore */ }
-                    if (!res.ok || !data.success) {
-                        showScheduleHint((data && data.error) ? data.error : 'Не вдалося зберегти інтервал.');
-                        return;
-                    }
-                    hideScheduleHint();
-                    if (typeof data.defaultSlotIntervalMinutes === 'number') {
-                        setDefaultSplitMinutesOnPage(data.defaultSlotIntervalMinutes);
-                    }
-                    renderSlots();
-                } catch (eInt) {
-                    showScheduleHint('Помилка мережі при збереженні інтервалу.');
+                closeSplitIntervalModal();
+                void splitSavedSlot(sid, raw);
+            }
+            splitIntervalModalConfirm?.addEventListener('click', confirmSplitIntervalModal);
+            splitIntervalModalInput?.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmSplitIntervalModal();
                 }
             });
 
@@ -1398,6 +1556,10 @@
             fetchExistingSnapshots();
 
             renderSlots();
+            if (adminPageRoot && adminPageRoot.getAttribute('data-public-link-save-flash') === '1') {
+                adminPageRoot.setAttribute('data-public-link-save-flash', '0');
+                window.setTimeout(pulsePublicLinkAfterSave, 0);
+            }
         })();
     </script>
 }

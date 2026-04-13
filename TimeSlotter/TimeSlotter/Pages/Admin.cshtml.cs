@@ -457,8 +457,8 @@ public class AdminModel : PageModel
         return new JsonResult(new { success = true, slots = list }, JsonWriteOptions);
     }
 
-    /// <summary>Split one merged (<see cref="Slot.IsGrouped"/>) available slot into segments of the provider default length.</summary>
-    public async Task<IActionResult> OnPostSplitSlotAsync(int slotId)
+    /// <summary>Split one merged (<see cref="Slot.IsGrouped"/>) available slot into segments; optional <paramref name="minutes"/> overrides the provider default for this request.</summary>
+    public async Task<IActionResult> OnPostSplitSlotAsync(int slotId, [FromForm] int? minutes = null)
     {
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
@@ -466,7 +466,8 @@ public class AdminModel : PageModel
             return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
         }
 
-        var chunkMinutes = Math.Clamp(user.DefaultSlotIntervalMinutes <= 0 ? 30 : user.DefaultSlotIntervalMinutes, 5, 480);
+        var fallback = Math.Clamp(user.DefaultSlotIntervalMinutes <= 0 ? 30 : user.DefaultSlotIntervalMinutes, 5, 480);
+        var chunkMinutes = minutes.HasValue ? Math.Clamp(minutes.Value, 5, 480) : fallback;
         const int minDurationMinutes = 5;
 
         var slot = await _context.Slots
@@ -690,6 +691,7 @@ public class AdminModel : PageModel
         _context.Slots.AddRange(slots);
         await _context.SaveChangesAsync();
 
+        TempData["AdminSlotsSaved"] = "1";
         return RedirectToPage();
     }
 
