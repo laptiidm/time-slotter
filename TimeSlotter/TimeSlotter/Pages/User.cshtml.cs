@@ -83,17 +83,28 @@ public class UserModel : PageModel
         }
 
         await using var tx = await _context.Database.BeginTransactionAsync();
-        var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == provider.Id);
+        var slot = await _context.Slots.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == provider.Id);
         if (slot == null || slot.Status != SlotStatus.Available)
         {
             await tx.RollbackAsync();
             return RedirectToPage(new { slug, date = (date ?? DateTime.Today).ToString("yyyy-MM-dd"), resource });
         }
 
-        slot.Status = SlotStatus.BookedByClient;
+        var slotDay = slot.StartTime.Date.ToString("yyyy-MM-dd");
+        var updatedRows = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+UPDATE Slots
+SET Status = CASE WHEN RequiresApproval = 1 THEN {(int)SlotStatus.Pending} ELSE {(int)SlotStatus.BookedByClient} END
+WHERE Id = {slotId} AND ProviderId = {provider.Id} AND Status = {(int)SlotStatus.Available}");
+        if (updatedRows == 0)
+        {
+            await tx.RollbackAsync();
+            return RedirectToPage(new { slug, date = (date ?? DateTime.Today).ToString("yyyy-MM-dd"), resource });
+        }
+
         _context.Bookings.Add(new Booking
         {
-            SlotId = slot.Id,
+            SlotId = slotId,
             CustomerName = customerName,
             CustomerPhone = customerPhone,
             CreatedAt = DateTime.UtcNow,
@@ -101,6 +112,6 @@ public class UserModel : PageModel
         await _context.SaveChangesAsync();
         await tx.CommitAsync();
 
-        return RedirectToPage(new { slug, date = slot.StartTime.Date.ToString("yyyy-MM-dd"), resource });
+        return RedirectToPage(new { slug, date = slotDay, resource });
     }
 }

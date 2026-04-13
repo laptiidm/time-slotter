@@ -77,20 +77,27 @@
                         @foreach (var slot in Model.DaySlots)
                         {
                             var isAvailable = slot.Status == TimeSlotter.Models.SlotStatus.Available;
+                            var isPending = slot.Status == TimeSlotter.Models.SlotStatus.Pending;
                             var isBooked = slot.Status == TimeSlotter.Models.SlotStatus.BookedByClient;
                             var isReserved = slot.Status == TimeSlotter.Models.SlotStatus.ReservedByAdmin;
-                            var statusApi = isAvailable ? "available" : isBooked ? "booked" : "reserved";
+                            var statusApi = isAvailable ? "available" : isPending ? "pending" : isBooked ? "booked" : "reserved";
                             var cardClass = isAvailable
                                 ? "slot-card rounded-xl border border-blue-500 bg-slate-950/50 p-4 ring-1 ring-inset ring-blue-500/25 transition-shadow"
+                                : isPending
+                                    ? "slot-card rounded-xl border border-violet-500/55 bg-violet-950/25 p-4 text-violet-50 ring-1 ring-inset ring-violet-500/25 transition-shadow"
                                 : isBooked
                                     ? "slot-card rounded-xl border border-amber-500/50 bg-amber-950/25 p-4 text-amber-50 ring-1 ring-inset ring-amber-500/25 transition-shadow"
                                     : "slot-card slot-card-reserved-stripe rounded-xl border border-slate-600/70 p-4 text-slate-400 ring-1 ring-inset ring-slate-600/45 transition-shadow";
-                            <article class="@cardClass" data-slot-id="@slot.Id" data-status="@statusApi">
-                                <div class="slot-time-block mb-3 font-mono text-base @(isAvailable ? "font-medium text-white" : isBooked ? "font-medium text-amber-100" : "text-slate-300")">
+                            <article class="@cardClass" data-slot-id="@slot.Id" data-status="@statusApi" data-requires-approval="@(isAvailable && slot.RequiresApproval ? "true" : "false")">
+                                <div class="slot-time-block mb-3 font-mono text-base @(isAvailable ? "font-medium text-white" : isPending ? "font-medium text-violet-100" : isBooked ? "font-medium text-amber-100" : "text-slate-300")">
                                     @slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")
                                     @if (!string.IsNullOrEmpty(slot.ResourceContext))
                                     {
-                                        <span class="slot-resource mt-1 block font-sans text-sm font-normal @(isAvailable ? "text-slate-400" : isBooked ? "text-amber-200/80" : "text-slate-500")">@slot.ResourceContext</span>
+                                        <span class="slot-resource mt-1 block font-sans text-sm font-normal @(isAvailable ? "text-slate-400" : isPending ? "text-violet-200/85" : isBooked ? "text-amber-200/80" : "text-slate-500")">@slot.ResourceContext</span>
+                                    }
+                                    @if (isAvailable && slot.RequiresApproval)
+                                    {
+                                        <span class="slot-approval-hint mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">На перевірку після заявки</span>
                                     }
                                 </div>
                                 <div class="slot-actions">
@@ -113,6 +120,10 @@
                                                 Підтвердити бронювання
                                             </button>
                                         </div>
+                                    }
+                                    else if (isPending)
+                                    {
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-violet-200/90">Очікує підтвердження</p>
                                     }
                                     else if (isBooked)
                                     {
@@ -158,6 +169,9 @@
                         <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити бронювання</button>
                     </div>
                 </template>
+                <template id="tmpl-slot-actions-pending">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-violet-200/90">Очікує підтвердження</p>
+                </template>
                 <template id="tmpl-slot-actions-booked">
                     <p class="text-xs font-semibold uppercase tracking-wide text-amber-200/90">Booked</p>
                 </template>
@@ -177,8 +191,8 @@
 
 <div id="bookingSuccessModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]" aria-hidden="true" role="dialog">
     <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-xl ring-1 ring-white/10">
-        <h2 class="text-lg font-semibold text-white">Успішно!</h2>
-        <p class="mt-2 text-sm text-slate-400">Бронювання підтверджено. До зустрічі.</p>
+        <h2 id="bookingSuccessTitle" class="text-lg font-semibold text-white">Заброньовано!</h2>
+        <p id="bookingSuccessBody" class="mt-2 text-sm text-slate-400">До зустрічі.</p>
         <button type="button" id="bookingSuccessClose" class="mt-6 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500">OK</button>
     </div>
 </div>
@@ -283,10 +297,27 @@
                     return grid && grid.getAttribute('data-is-site-admin') === 'true';
                 }
 
+                function syncApprovalHintOnCard(card) {
+                    if (!card) return;
+                    var timeBlock = card.querySelector('.slot-time-block');
+                    if (!timeBlock) return;
+                    var old = timeBlock.querySelector('.slot-approval-hint');
+                    if (old) old.remove();
+                    if (card.getAttribute('data-requires-approval') !== 'true') return;
+                    if (card.getAttribute('data-status') !== 'available') return;
+                    var hint = document.createElement('span');
+                    hint.className = 'slot-approval-hint mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-200/90';
+                    hint.textContent = 'На перевірку після заявки';
+                    timeBlock.appendChild(hint);
+                }
+
                 function applyCardStatus(card, status) {
                     if (!card) return;
                     var prev = card.getAttribute('data-status');
-                    if (prev === status) return;
+                    if (prev === status) {
+                        syncApprovalHintOnCard(card);
+                        return;
+                    }
 
                     var timeBlock = card.querySelector('.slot-time-block');
                     var resource = card.querySelector('.slot-resource');
@@ -301,6 +332,13 @@
                         }
                         mountTemplateInto(actions, isSiteAdminGrid() ? 'tmpl-slot-actions-available-admin' : 'tmpl-slot-actions-available');
                         applyPrefillToCardActions(card);
+                    } else if (status === 'pending') {
+                        card.className = 'slot-card rounded-xl border border-violet-500/55 bg-violet-950/25 p-4 text-violet-50 ring-1 ring-inset ring-violet-500/25 transition-shadow';
+                        if (timeBlock) {
+                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base font-medium text-violet-100';
+                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-violet-200/85';
+                        }
+                        mountTemplateInto(actions, 'tmpl-slot-actions-pending');
                     } else if (status === 'booked') {
                         card.className = 'slot-card rounded-xl border border-amber-500/50 bg-amber-950/25 p-4 text-amber-50 ring-1 ring-inset ring-amber-500/25 transition-shadow';
                         if (timeBlock) {
@@ -317,6 +355,7 @@
                         mountTemplateInto(actions, isSiteAdminGrid() ? 'tmpl-slot-actions-reserved-admin' : 'tmpl-slot-actions-reserved');
                     }
                     card.setAttribute('data-status', status);
+                    syncApprovalHintOnCard(card);
                 }
 
                 function appendSlotCard(s) {
@@ -324,6 +363,7 @@
                     var article = document.createElement('article');
                     article.setAttribute('data-slot-id', String(s.id));
                     article.setAttribute('data-status', '');
+                    article.setAttribute('data-requires-approval', (s.requiresApproval === true && s.status === 'available') ? 'true' : 'false');
                     var timeBlock = document.createElement('div');
                     timeBlock.className = 'slot-time-block mb-3 font-mono text-base';
                     timeBlock.appendChild(document.createTextNode(s.start + ' – ' + s.end));
@@ -365,11 +405,14 @@
                     slots.forEach(function (s) {
                         var sid = s.id;
                         var id = typeof sid === 'string' ? parseInt(sid, 10) : sid;
-                        map[id] = s.status;
+                        map[id] = { status: s.status, requiresApproval: s.requiresApproval === true };
                     });
                     grid.querySelectorAll('.slot-card').forEach(function (card) {
                         var id = parseInt(card.getAttribute('data-slot-id'), 10);
-                        if (map[id]) applyCardStatus(card, map[id]);
+                        var entry = map[id];
+                        if (!entry) return;
+                        card.setAttribute('data-requires-approval', entry.requiresApproval ? 'true' : 'false');
+                        applyCardStatus(card, entry.status);
                     });
                     updateSlotsScrollFade();
                 }
@@ -437,8 +480,23 @@
                     loadScheduleForDate(d, { pushHistory: false });
                 });
 
-                function openSuccess() {
+                function openSuccess(pendingApproval) {
                     if (!successModal) return;
+                    var title = document.getElementById('bookingSuccessTitle');
+                    var body = document.getElementById('bookingSuccessBody');
+                    if (pendingApproval) {
+                        if (title) title.textContent = 'Запит надіслано, очікуйте на підтвердження';
+                        if (body) {
+                            body.textContent = '';
+                            body.classList.add('hidden');
+                        }
+                    } else {
+                        if (title) title.textContent = 'Заброньовано!';
+                        if (body) {
+                            body.textContent = 'До зустрічі.';
+                            body.classList.remove('hidden');
+                        }
+                    }
                     successModal.classList.remove('hidden');
                     successModal.classList.add('flex');
                     successModal.setAttribute('aria-hidden', 'false');
@@ -595,7 +653,7 @@
                                     alert(data.error || 'Не вдалося забронювати.');
                                     return;
                                 }
-                                openSuccess();
+                                openSuccess(!!data.pendingApproval);
                             } catch (err) {
                                 btn.disabled = false;
                                 alert('Помилка мережі.');

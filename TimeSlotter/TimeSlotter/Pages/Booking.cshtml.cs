@@ -140,7 +140,12 @@ public class BookingModel : PageModel
             .AsNoTracking()
             .Where(s => s.ProviderId == provider.Id && s.StartTime >= dayStart && s.StartTime < dayEndExclusive)
             .OrderBy(s => s.StartTime)
-            .Select(s => new { id = s.Id, status = SlotStatusApiToken(s.Status) })
+            .Select(s => new
+            {
+                id = s.Id,
+                status = SlotStatusApiToken(s.Status),
+                requiresApproval = s.Status == SlotStatus.Available && s.RequiresApproval,
+            })
             .ToListAsync();
 
         return new JsonResult(new { slots }, JsonWriteOptions);
@@ -200,6 +205,7 @@ public class BookingModel : PageModel
             end = s.EndTime.ToString("HH:mm"),
             resourceContext = s.ResourceContext,
             status = SlotStatusApiToken(s.Status),
+            requiresApproval = s.Status == SlotStatus.Available && s.RequiresApproval,
         }).ToList();
 
         return new JsonResult(new
@@ -265,9 +271,10 @@ public class BookingModel : PageModel
             return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
-        var updatedRows = await _context.Slots
-            .Where(s => s.Id == slotId && s.ProviderId == provider.Id && s.Status == SlotStatus.Available)
-            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.BookedByClient));
+        var updatedRows = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+UPDATE Slots
+SET Status = CASE WHEN RequiresApproval = 1 THEN {(int)SlotStatus.Pending} ELSE {(int)SlotStatus.BookedByClient} END
+WHERE Id = {slotId} AND ProviderId = {provider.Id} AND Status = {(int)SlotStatus.Available}");
 
         if (updatedRows == 0)
         {
@@ -283,6 +290,12 @@ public class BookingModel : PageModel
             };
         }
 
+        var pendingApproval = await _context.Slots
+            .AsNoTracking()
+            .Where(s => s.Id == slotId)
+            .Select(s => s.Status == SlotStatus.Pending)
+            .FirstAsync();
+
         _context.Bookings.Add(new Booking
         {
             SlotId = slotId,
@@ -295,15 +308,16 @@ public class BookingModel : PageModel
         await _context.SaveChangesAsync();
         await tx.CommitAsync();
 
-        return new JsonResult(new { success = true }, JsonWriteOptions);
+        return new JsonResult(new { success = true, pendingApproval }, JsonWriteOptions);
     }
 
     private static string SlotStatusApiToken(SlotStatus status) =>
         status switch
         {
             SlotStatus.Available => "available",
+            SlotStatus.Pending => "pending",
             SlotStatus.BookedByClient => "booked",
             SlotStatus.ReservedByAdmin => "reserved",
-            _ => "reserved",
+            _ => "reserved", // future enum values / raw DB ints
         };
 }

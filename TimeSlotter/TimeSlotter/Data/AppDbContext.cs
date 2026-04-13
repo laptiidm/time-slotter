@@ -29,6 +29,9 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
 
             slot.Property(s => s.IsGrouped)
                 .HasDefaultValue(false);
+
+            slot.Property(s => s.RequiresApproval)
+                .HasDefaultValue(false);
         });
 
         // Single-table strategy: Identity user store uses the Providers table name.

@@ -36,7 +36,7 @@
                                 </p>
                                 <p class="mt-1 text-xs text-slate-500">@b.CustomerName · @b.CustomerPhone</p>
                             </div>
-                            <span class="shrink-0 rounded-md border px-2 py-0.5 text-xs @(b.SlotStatus == TimeSlotter.Models.SlotStatus.BookedByClient ? "border-amber-500/40 text-amber-200" : "border-slate-600 text-slate-400")">
+                            <span class="shrink-0 rounded-md border px-2 py-0.5 text-xs @(b.SlotStatus == TimeSlotter.Models.SlotStatus.BookedByClient ? "border-amber-500/40 text-amber-200" : b.SlotStatus == TimeSlotter.Models.SlotStatus.Pending ? "border-violet-500/45 text-violet-200" : "border-slate-600 text-slate-400")">
                                 @b.SlotStatus
                             </span>
                         </div>

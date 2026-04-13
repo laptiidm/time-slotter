@@ -336,7 +336,7 @@ public class AdminModel : PageModel
             return new JsonResult(new { success = false, error = "Slot not found." }, JsonWriteOptions) { StatusCode = 404 };
         }
 
-        if (slot.Status == SlotStatus.BookedByClient)
+        if (slot.Status is SlotStatus.BookedByClient or SlotStatus.Pending)
         {
             return new JsonResult(new { success = false, error = "Cannot change a client-booked slot." }, JsonWriteOptions) { StatusCode = 400 };
         }
@@ -357,6 +357,99 @@ public class AdminModel : PageModel
         await _context.SaveChangesAsync();
         var code = (int)slot.Status;
         return new JsonResult(new { success = true, newStatus = code }, JsonWriteOptions);
+    }
+
+    /// <summary>AJAX: set <see cref="Slot.RequiresApproval"/> for an available slot (immediate persist).</summary>
+    public async Task<JsonResult> OnPostToggleSlotApprovalAsync(int id, [FromForm] bool requiresApproval)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == id && s.ProviderId == user.Id);
+        if (slot == null)
+        {
+            return new JsonResult(new { success = false, error = "Slot not found." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (slot.Status != SlotStatus.Available)
+        {
+            return new JsonResult(new { success = false, error = "Можна змінювати лише для вільного слота." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        slot.RequiresApproval = requiresApproval;
+        await _context.SaveChangesAsync();
+
+        var day = DateOnly.FromDateTime(slot.StartTime);
+        var snap = ToSnapshotDto(slot, day.ToString("yyyy-MM-dd"));
+        return new JsonResult(new { success = true, slot = snap }, JsonWriteOptions);
+    }
+
+    /// <summary>AJAX: confirm a <see cref="SlotStatus.Pending"/> public request as booked.</summary>
+    public async Task<JsonResult> OnPostApprovePendingSlotAsync(int slotId)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        var slot = await _context.Slots
+            .Include(s => s.Bookings)
+            .FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == user.Id);
+        if (slot == null)
+        {
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (slot.Status != SlotStatus.Pending || slot.Bookings.Count == 0)
+        {
+            return new JsonResult(new { success = false, error = "Слот не в статусі очікування." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        slot.Status = SlotStatus.BookedByClient;
+        await _context.SaveChangesAsync();
+
+        var day = DateOnly.FromDateTime(slot.StartTime);
+        var refreshed = await LoadSlotsForDayAsync(user.Id, day);
+        var entity = refreshed.FirstOrDefault(s => s.Id == slotId);
+        var snap = entity != null ? ToSnapshotDto(entity, day.ToString("yyyy-MM-dd")) : ToSnapshotDto(slot, day.ToString("yyyy-MM-dd"));
+        return new JsonResult(new { success = true, slot = snap }, JsonWriteOptions);
+    }
+
+    /// <summary>AJAX: decline a pending request — slot becomes available and booking rows are removed.</summary>
+    public async Task<JsonResult> OnPostRejectPendingSlotAsync(int slotId)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Unauthorized" }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        var slot = await _context.Slots
+            .Include(s => s.Bookings)
+            .FirstOrDefaultAsync(s => s.Id == slotId && s.ProviderId == user.Id);
+        if (slot == null)
+        {
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        if (slot.Status != SlotStatus.Pending)
+        {
+            return new JsonResult(new { success = false, error = "Слот не в статусі очікування." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        _context.Bookings.RemoveRange(slot.Bookings);
+        slot.Status = SlotStatus.Available;
+        await _context.SaveChangesAsync();
+
+        var day = DateOnly.FromDateTime(slot.StartTime);
+        var refreshed = await LoadSlotsForDayAsync(user.Id, day);
+        var entity = refreshed.FirstOrDefault(s => s.Id == slotId);
+        var snap = entity != null ? ToSnapshotDto(entity, day.ToString("yyyy-MM-dd")) : ToSnapshotDto(slot, day.ToString("yyyy-MM-dd"));
+        return new JsonResult(new { success = true, slot = snap }, JsonWriteOptions);
     }
 
     public async Task<JsonResult> OnPostDeleteSlotAsync(int id)
@@ -447,6 +540,7 @@ public class AdminModel : PageModel
             Status = SlotStatus.Available,
             ResourceContext = inheritedRc,
             IsGrouped = true,
+            RequiresApproval = ordered.Any(s => s.RequiresApproval),
         };
         _context.Slots.Add(newSlot);
         await _context.SaveChangesAsync();
@@ -525,6 +619,7 @@ public class AdminModel : PageModel
                     Status = SlotStatus.Available,
                     ResourceContext = string.IsNullOrWhiteSpace(slot.ResourceContext) ? null : slot.ResourceContext.Trim(),
                     IsGrouped = false,
+                    RequiresApproval = slot.RequiresApproval,
                 });
                 cur = next;
             }
@@ -538,6 +633,7 @@ public class AdminModel : PageModel
                     Status = SlotStatus.Available,
                     ResourceContext = string.IsNullOrWhiteSpace(slot.ResourceContext) ? null : slot.ResourceContext.Trim(),
                     IsGrouped = false,
+                    RequiresApproval = slot.RequiresApproval,
                 });
                 break;
             }
@@ -732,7 +828,8 @@ public class AdminModel : PageModel
             s.Status.ToString(),
             b?.CustomerName,
             b?.CustomerPhone,
-            s.IsGrouped);
+            s.IsGrouped,
+            s.RequiresApproval);
     }
 
     private static bool TryParseHm(string value, out int totalMinutes)
@@ -765,7 +862,8 @@ public class AdminModel : PageModel
         string Status,
         string? ClientName,
         string? ClientPhone,
-        bool IsGrouped);
+        bool IsGrouped,
+        bool RequiresApproval);
 
     private sealed class SlotDraftJson
     {
