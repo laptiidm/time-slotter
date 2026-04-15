@@ -47,9 +47,6 @@ public class BookingModel : PageModel
     /// <summary>When signed in, booking can link to this account (<see cref="OnPostBookAsync"/> sets <see cref="Booking.CustomerId"/>).</summary>
     public bool IsAuthenticatedBooker { get; set; }
 
-    public string? PrefillCustomerName { get; set; }
-    public string? PrefillCustomerPhone { get; set; }
-
     public async Task<IActionResult> OnGetAsync(string? slug, DateTime? date)
     {
         if (string.IsNullOrWhiteSpace(slug))
@@ -97,34 +94,41 @@ public class BookingModel : PageModel
             if (me != null)
             {
                 IsAuthenticatedBooker = true;
-                PrefillCustomerName = me.Name;
-                PrefillCustomerPhone = me.PhoneNumber ?? string.Empty;
             }
         }
 
         return Page();
     }
 
-    public async Task<IActionResult> OnGetSlotStatusesAsync(string? slug, string? date)
+    public async Task<IActionResult> OnGetSlotStatusesAsync(int? providerId, string? slug, string? date)
     {
-        if (string.IsNullOrWhiteSpace(slug))
+        Provider? provider = null;
+        if (providerId.HasValue && providerId.Value > 0)
+        {
+            provider = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == providerId.Value);
+        }
+
+        if (provider == null && string.IsNullOrWhiteSpace(slug))
         {
             slug = Request.Query["slug"].FirstOrDefault();
         }
 
-        if (string.IsNullOrWhiteSpace(slug))
+        if (provider == null && string.IsNullOrWhiteSpace(slug))
         {
             return new JsonResult(new { error = "Некоректне посилання провайдера." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
-        var normalizedSlug = slug.TrimStart('@');
-        normalizedSlug = string.IsNullOrEmpty(normalizedSlug) ? slug : "@" + normalizedSlug;
-
-        var provider = await _context.Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
         if (provider == null)
         {
-            return new JsonResult(new { error = "Провайдера не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+            var normalizedSlug = slug!.TrimStart('@');
+            normalizedSlug = string.IsNullOrEmpty(normalizedSlug) ? slug : "@" + normalizedSlug;
+            provider = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Slug == normalizedSlug || u.Slug == slug);
+            if (provider == null)
+            {
+                return new JsonResult(new { error = "Провайдера не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+            }
         }
 
         if (string.IsNullOrWhiteSpace(date))
@@ -152,7 +156,66 @@ public class BookingModel : PageModel
             })
             .ToListAsync();
 
-        return new JsonResult(new { slots }, JsonWriteOptions);
+        var latestUpdatedAt = await _context.Slots
+            .AsNoTracking()
+            .Where(s => s.ProviderId == provider.Id && s.StartTime >= dayStart && s.StartTime < dayEndExclusive)
+            .MaxAsync(s => (DateTime?)s.UpdatedAt);
+
+        return new JsonResult(new { slots, latestVersion = ToVersionTicks(latestUpdatedAt) }, JsonWriteOptions);
+    }
+
+    /// <summary>Version-based compact delta for fast status sync (id + status code + requires-approval + latest version).</summary>
+    public async Task<IActionResult> OnGetDeltaUpdateAsync(int providerId, string? date, long? lastClientVersion)
+    {
+        if (providerId <= 0)
+        {
+            return new JsonResult(new { error = "Некоректний providerId." }, JsonWriteOptions) { StatusCode = 400 };
+        }
+
+        if (string.IsNullOrWhiteSpace(date))
+        {
+            date = Request.Query["date"].FirstOrDefault();
+        }
+
+        if (!DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dayParsed))
+        {
+            dayParsed = DateTime.Today;
+        }
+
+        var dayStart = DateTime.SpecifyKind(dayParsed.Date, DateTimeKind.Unspecified);
+        var dayEndExclusive = dayStart.AddDays(1);
+        var lastVersionUtc = FromVersionTicks(lastClientVersion);
+
+        var changed = await _context.Slots
+            .AsNoTracking()
+            .Where(s => s.ProviderId == providerId
+                        && s.StartTime >= dayStart
+                        && s.StartTime < dayEndExclusive
+                        && s.UpdatedAt > lastVersionUtc)
+            .OrderBy(s => s.Id)
+            .Select(s => new
+            {
+                id = s.Id,
+                s = (int)s.Status,
+                a = s.Status == SlotStatus.Available && s.RequiresApproval,
+                cn = s.Bookings.OrderByDescending(x => x.CreatedAt).Select(x => x.CustomerName).FirstOrDefault(),
+                cp = s.Bookings.OrderByDescending(x => x.CreatedAt).Select(x => x.CustomerPhone).FirstOrDefault(),
+            })
+            .ToListAsync();
+
+        var latestUpdatedAt = await _context.Slots
+            .AsNoTracking()
+            .Where(s => s.ProviderId == providerId && s.StartTime >= dayStart && s.StartTime < dayEndExclusive)
+            .MaxAsync(s => (DateTime?)s.UpdatedAt);
+        var latestVersion = ToVersionTicks(latestUpdatedAt);
+
+        if (changed.Count == 0)
+        {
+            Response.StatusCode = StatusCodes.Status304NotModified;
+            return new JsonResult(new { c = Array.Empty<object>(), v = latestVersion }, JsonWriteOptions);
+        }
+
+        return new JsonResult(new { c = changed, v = latestVersion }, JsonWriteOptions);
     }
 
     /// <summary>JSON day schedule for client-side date changes (no full page reload).</summary>
@@ -211,18 +274,21 @@ public class BookingModel : PageModel
             status = SlotStatusApiToken(s.Status),
             requiresApproval = s.Status == SlotStatus.Available && s.RequiresApproval,
         }).ToList();
+        var latestUpdatedAt = rawSlots.Count > 0 ? rawSlots.Max(s => s.UpdatedAt) : (DateTime?)null;
 
         return new JsonResult(new
         {
             dateYmd,
             titleDateUk,
+            providerId = provider.Id,
+            latestVersion = ToVersionTicks(latestUpdatedAt),
             publicAvailableSlotCount,
             totalCount = slots.Count,
             slots,
         }, JsonWriteOptions);
     }
 
-    public async Task<IActionResult> OnPostBookAsync(string? slug, int slotId, string? name, string? phone)
+    public async Task<IActionResult> OnPostBookAsync(string? slug, int slotId, string? name, string? phone, string? clientComment)
     {
         if (string.IsNullOrWhiteSpace(slug))
         {
@@ -231,6 +297,11 @@ public class BookingModel : PageModel
 
         name = (name ?? string.Empty).Trim();
         phone = (phone ?? string.Empty).Trim();
+        clientComment = string.IsNullOrWhiteSpace(clientComment) ? null : clientComment.Trim();
+        if (clientComment != null && clientComment.Length > 200)
+        {
+            clientComment = clientComment[..200];
+        }
 
         int? customerId = null;
         if (User.Identity?.IsAuthenticated == true)
@@ -277,7 +348,9 @@ public class BookingModel : PageModel
 
         var updatedRows = await _context.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE Slots
-SET Status = CASE WHEN RequiresApproval = 1 THEN {(int)SlotStatus.Pending} ELSE {(int)SlotStatus.BookedByClient} END
+SET Status = CASE WHEN RequiresApproval = 1 THEN {(int)SlotStatus.Pending} ELSE {(int)SlotStatus.BookedByClient} END,
+    ClientComment = {clientComment},
+    UpdatedAt = {DateTime.UtcNow}
 WHERE Id = {slotId} AND ProviderId = {provider.Id} AND Status = {(int)SlotStatus.Available}");
 
         if (updatedRows == 0)
@@ -324,4 +397,19 @@ WHERE Id = {slotId} AND ProviderId = {provider.Id} AND Status = {(int)SlotStatus
             SlotStatus.ReservedByAdmin => "reserved",
             _ => "reserved", // future enum values / raw DB ints
         };
+
+    private static long ToVersionTicks(DateTime? dt) => dt?.ToUniversalTime().Ticks ?? 0L;
+
+    private static DateTime FromVersionTicks(long? ticks)
+    {
+        if (!ticks.HasValue || ticks.Value <= 0) return DateTime.MinValue;
+        try
+        {
+            return new DateTime(ticks.Value, DateTimeKind.Utc);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return DateTime.MinValue;
+        }
+    }
 }

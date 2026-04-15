@@ -28,6 +28,13 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
                 .HasMaxLength(300)
                 .IsRequired(false);
 
+            slot.Property(s => s.ClientComment)
+                .HasMaxLength(200)
+                .IsRequired(false);
+
+            slot.Property(s => s.UpdatedAt)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
             slot.Property(s => s.Status)
                 .HasConversion<int>();
 

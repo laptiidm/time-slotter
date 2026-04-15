@@ -73,7 +73,7 @@
 
             <div id="bookingSlotsSection" class="relative @(Model.DaySlots.Any() ? "" : "hidden")">
                 <div id="bookingSlotsScroll" class="custom-scrollbar max-h-[70vh] overflow-y-auto overflow-x-hidden pr-2 md:max-h-[min(60vh,500px)]">
-                    <div class="grid grid-cols-1 gap-4 pb-1 sm:grid-cols-2" id="slotGrid" data-slug="@Model.SlugRoute" data-is-site-admin="@(Model.IsSiteAdmin ? "true" : "false")" data-admin-slot-api="@Url.Page("/Index")" data-prefill-name="@(Model.PrefillCustomerName ?? "")" data-prefill-phone="@(Model.PrefillCustomerPhone ?? "")">
+                    <div class="grid grid-cols-1 gap-4 pb-1 sm:grid-cols-2" id="slotGrid" data-slug="@Model.SlugRoute" data-provider-id="@Model.Provider.Id" data-is-site-admin="@(Model.IsSiteAdmin ? "true" : "false")" data-admin-slot-api="@Url.Page("/Index")">
                         @foreach (var slot in Model.DaySlots)
                         {
                             var isAvailable = slot.Status == TimeSlotter.Models.SlotStatus.Available;
@@ -89,12 +89,11 @@
                                     ? "slot-card rounded-xl border border-amber-500/50 bg-amber-950/25 p-4 text-amber-50 ring-1 ring-inset ring-amber-500/25 transition-shadow"
                                     : "slot-card slot-card-reserved-stripe rounded-xl border border-slate-600/70 p-4 text-slate-400 ring-1 ring-inset ring-slate-600/45 transition-shadow";
                             <article class="@cardClass" data-slot-id="@slot.Id" data-status="@statusApi" data-requires-approval="@(isAvailable && slot.RequiresApproval ? "true" : "false")">
-                                <div class="slot-time-block mb-3 font-mono text-base @(isAvailable ? "font-medium text-white" : isPending ? "font-medium text-violet-100" : isBooked ? "font-medium text-amber-100" : "text-slate-300")">
-                                    @slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")
-                                    @if (!string.IsNullOrEmpty(slot.ResourceContext))
-                                    {
-                                        <span class="slot-resource mt-1 block font-sans text-sm font-normal @(isAvailable ? "text-slate-400" : isPending ? "text-violet-200/85" : isBooked ? "text-amber-200/80" : "text-slate-500")">@slot.ResourceContext</span>
-                                    }
+                                <div class="slot-time-block mb-3">
+                                    <div class="flex items-center justify-between w-full">
+                                        <span class="slot-time-label shrink-0 font-mono text-sm @(isAvailable ? "font-medium text-white" : isPending ? "font-medium text-violet-100" : isBooked ? "font-medium text-amber-100" : "text-slate-300")">@slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")</span>
+                                        <span class="slot-resource ml-4 truncate text-right font-sans text-xs font-normal @(isAvailable ? "text-slate-400" : isPending ? "text-violet-200/85" : isBooked ? "text-amber-200/80" : "text-slate-500")">@(!string.IsNullOrWhiteSpace(slot.ResourceContext) ? slot.ResourceContext : "\u00A0")</span>
+                                    </div>
                                     @if (isAvailable && slot.RequiresApproval)
                                     {
                                         <span class="slot-approval-hint mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">Потребує підтвердження</span>
@@ -114,8 +113,9 @@
                                         </button>
                                         <div class="book-form hidden w-full flex-col gap-2">
                                             <button type="button" class="cancel-book-btn self-end text-xs font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-200 hover:decoration-slate-400">Скасувати</button>
-                                            <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
-                                            <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
+                                            <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name"/>
+                                            <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel"/>
+                                            <textarea name="clientComment" class="slot-client-comment w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Коментар до бронювання (необов'язково)" maxlength="200" rows="2"></textarea>
                                             <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">
                                                 Підтвердити
                                             </button>
@@ -152,8 +152,9 @@
                     <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">Забронювати</button>
                     <div class="book-form hidden w-full flex-col gap-2">
                         <button type="button" class="cancel-book-btn self-end text-xs font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-200 hover:decoration-slate-400">Скасувати</button>
-                        <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
-                        <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
+                        <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name"/>
+                        <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel"/>
+                        <textarea name="clientComment" class="slot-client-comment w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Коментар до бронювання (необов'язково)" maxlength="200" rows="2"></textarea>
                         <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити</button>
                     </div>
                 </template>
@@ -164,8 +165,9 @@
                     <button type="button" class="toggle-book-btn w-full rounded-lg border border-blue-400/50 bg-blue-600/20 py-2.5 text-sm font-semibold text-blue-100 transition hover:bg-blue-600/35">Забронювати</button>
                     <div class="book-form hidden w-full flex-col gap-2">
                         <button type="button" class="cancel-book-btn self-end text-xs font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-200 hover:decoration-slate-400">Скасувати</button>
-                        <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name" value="@Model.PrefillCustomerName"/>
-                        <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel" value="@Model.PrefillCustomerPhone"/>
+                        <input type="text" name="name" class="slot-name w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Ім'я" maxlength="120" autocomplete="name"/>
+                        <input type="tel" name="phone" class="slot-phone w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Телефон" maxlength="40" autocomplete="tel"/>
+                        <textarea name="clientComment" class="slot-client-comment w-full rounded-md border-0 bg-slate-800 py-2 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500" placeholder="Коментар до бронювання (необов'язково)" maxlength="200" rows="2"></textarea>
                         <button type="button" class="book-btn w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Підтвердити</button>
                     </div>
                 </template>
@@ -214,6 +216,10 @@
                 var bookingToast = document.getElementById('bookingToast');
                 var statusPollTimer = null;
                 var toastHideTimer = null;
+                var lastServerVersion = 0;
+                var currentProviderId = parseInt((grid && grid.getAttribute('data-provider-id')) || '0', 10) || 0;
+                var POLL_ACTIVE_MS = 3000;
+                var POLL_HIDDEN_MS = 30000;
 
                 function updateSlotsScrollFade() {
                     if (!slotsScroll || !slotsScrollFade) return;
@@ -269,10 +275,28 @@
                 function slotStatusesUrl() {
                     var u = new URL('/Booking', window.location.origin);
                     u.searchParams.set('handler', 'SlotStatuses');
-                    u.searchParams.set('slug', slug);
+                    if (currentProviderId) u.searchParams.set('providerId', String(currentProviderId));
+                    else u.searchParams.set('slug', slug);
                     var d = (dateInput && dateInput.value) || parseDateFromLocation() || '';
                     u.searchParams.set('date', d);
                     return u.toString();
+                }
+
+                function deltaStatusesUrl() {
+                    var u = new URL('/Booking', window.location.origin);
+                    u.searchParams.set('handler', 'DeltaUpdate');
+                    u.searchParams.set('providerId', String(currentProviderId || 0));
+                    var d = (dateInput && dateInput.value) || parseDateFromLocation() || '';
+                    u.searchParams.set('date', d);
+                    u.searchParams.set('lastClientVersion', String(lastServerVersion || 0));
+                    return u.toString();
+                }
+
+                function statusTokenFromCode(code) {
+                    if (code === 0) return 'available';
+                    if (code === 1) return 'pending';
+                    if (code === 2) return 'booked';
+                    return 'reserved';
                 }
 
                 function mountTemplateInto(el, templateId) {
@@ -281,16 +305,6 @@
                     el.textContent = '';
                     var cloned = tpl.content.cloneNode(true);
                     while (cloned.firstChild) el.appendChild(cloned.firstChild);
-                }
-
-                function applyPrefillToCardActions(card) {
-                    if (!grid || !card) return;
-                    var pn = grid.getAttribute('data-prefill-name') || '';
-                    var pp = grid.getAttribute('data-prefill-phone') || '';
-                    var ni = card.querySelector('.slot-name');
-                    var pi = card.querySelector('.slot-phone');
-                    if (ni && pn) ni.value = pn;
-                    if (pi && pp) pi.value = pp;
                 }
 
                 function isSiteAdminGrid() {
@@ -320,6 +334,7 @@
                     }
 
                     var timeBlock = card.querySelector('.slot-time-block');
+                    var timeLabel = card.querySelector('.slot-time-label');
                     var resource = card.querySelector('.slot-resource');
                     var actions = card.querySelector('.slot-actions');
                     if (!actions) return;
@@ -327,30 +342,33 @@
                     if (status === 'available') {
                         card.className = 'slot-card rounded-xl border border-blue-500 bg-slate-950/50 p-4 ring-1 ring-inset ring-blue-500/25 transition-shadow';
                         if (timeBlock) {
-                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base font-medium text-white';
-                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-slate-400';
+                            timeBlock.className = 'slot-time-block mb-3';
+                            if (timeLabel) timeLabel.className = 'slot-time-label shrink-0 font-mono text-sm font-medium text-white';
+                            if (resource) resource.className = 'slot-resource ml-4 truncate text-right font-sans text-xs font-normal text-slate-400';
                         }
                         mountTemplateInto(actions, isSiteAdminGrid() ? 'tmpl-slot-actions-available-admin' : 'tmpl-slot-actions-available');
-                        applyPrefillToCardActions(card);
                     } else if (status === 'pending') {
                         card.className = 'slot-card rounded-xl border border-violet-500/55 bg-violet-950/25 p-4 text-violet-50 ring-1 ring-inset ring-violet-500/25 transition-shadow';
                         if (timeBlock) {
-                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base font-medium text-violet-100';
-                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-violet-200/85';
+                            timeBlock.className = 'slot-time-block mb-3';
+                            if (timeLabel) timeLabel.className = 'slot-time-label shrink-0 font-mono text-sm font-medium text-violet-100';
+                            if (resource) resource.className = 'slot-resource ml-4 truncate text-right font-sans text-xs font-normal text-violet-200/85';
                         }
                         mountTemplateInto(actions, 'tmpl-slot-actions-pending');
                     } else if (status === 'booked') {
                         card.className = 'slot-card rounded-xl border border-amber-500/50 bg-amber-950/25 p-4 text-amber-50 ring-1 ring-inset ring-amber-500/25 transition-shadow';
                         if (timeBlock) {
-                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base font-medium text-amber-100';
-                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-amber-200/80';
+                            timeBlock.className = 'slot-time-block mb-3';
+                            if (timeLabel) timeLabel.className = 'slot-time-label shrink-0 font-mono text-sm font-medium text-amber-100';
+                            if (resource) resource.className = 'slot-resource ml-4 truncate text-right font-sans text-xs font-normal text-amber-200/80';
                         }
                         mountTemplateInto(actions, 'tmpl-slot-actions-booked');
                     } else {
                         card.className = 'slot-card slot-card-reserved-stripe rounded-xl border border-slate-600/70 p-4 text-slate-400 ring-1 ring-inset ring-slate-600/45 transition-shadow';
                         if (timeBlock) {
-                            timeBlock.className = 'slot-time-block mb-3 font-mono text-base text-slate-300';
-                            if (resource) resource.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-slate-500';
+                            timeBlock.className = 'slot-time-block mb-3';
+                            if (timeLabel) timeLabel.className = 'slot-time-label shrink-0 font-mono text-sm text-slate-300';
+                            if (resource) resource.className = 'slot-resource ml-4 truncate text-right font-sans text-xs font-normal text-slate-500';
                         }
                         mountTemplateInto(actions, isSiteAdminGrid() ? 'tmpl-slot-actions-reserved-admin' : 'tmpl-slot-actions-reserved');
                     }
@@ -365,14 +383,18 @@
                     article.setAttribute('data-status', '');
                     article.setAttribute('data-requires-approval', (s.requiresApproval === true && s.status === 'available') ? 'true' : 'false');
                     var timeBlock = document.createElement('div');
-                    timeBlock.className = 'slot-time-block mb-3 font-mono text-base';
-                    timeBlock.appendChild(document.createTextNode(s.start + ' – ' + s.end));
-                    if (s.resourceContext) {
-                        var resEl = document.createElement('span');
-                        resEl.className = 'slot-resource mt-1 block font-sans text-sm font-normal text-slate-400';
-                        resEl.textContent = s.resourceContext;
-                        timeBlock.appendChild(resEl);
-                    }
+                    timeBlock.className = 'slot-time-block mb-3';
+                    var timeRow = document.createElement('div');
+                    timeRow.className = 'flex items-center justify-between w-full';
+                    var timeEl = document.createElement('span');
+                    timeEl.className = 'slot-time-label shrink-0 font-mono';
+                    timeEl.textContent = s.start + ' – ' + s.end;
+                    timeRow.appendChild(timeEl);
+                    var resEl = document.createElement('span');
+                    resEl.className = 'slot-resource ml-4 truncate text-right font-sans text-xs font-normal text-slate-400';
+                    resEl.textContent = s.resourceContext ? s.resourceContext : '\u00A0';
+                    timeRow.appendChild(resEl);
+                    timeBlock.appendChild(timeRow);
                     var actions = document.createElement('div');
                     actions.className = 'slot-actions';
                     article.appendChild(timeBlock);
@@ -417,6 +439,20 @@
                     updateSlotsScrollFade();
                 }
 
+                function applyDeltaStatuses(changes) {
+                    if (!grid || !changes || !changes.length) return;
+                    changes.forEach(function (ch) {
+                        var id = parseInt(ch.id, 10);
+                        if (!Number.isFinite(id)) return;
+                        var card = grid.querySelector('.slot-card[data-slot-id="' + id + '"]');
+                        if (!card) return;
+                        var statusToken = statusTokenFromCode(ch.s);
+                        card.setAttribute('data-requires-approval', ch.a === true ? 'true' : 'false');
+                        applyCardStatus(card, statusToken);
+                    });
+                    updateSlotsScrollFade();
+                }
+
                 async function fetchSlotStatuses() {
                     if (!grid || !slug) return;
                     try {
@@ -427,8 +463,43 @@
                         });
                         if (!res.ok) return;
                         var data = await res.json();
-                        if (data && data.slots) applySlotStatuses(data.slots);
+                        if (data && data.slots) {
+                            applySlotStatuses(data.slots);
+                            if (typeof data.latestVersion === 'number') lastServerVersion = data.latestVersion;
+                        }
                     } catch (e) { /* ignore poll errors */ }
+                }
+
+                async function fetchSlotStatusDelta() {
+                    if (!grid || !currentProviderId) return;
+                    try {
+                        var res = await fetch(deltaStatusesUrl(), {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (res.status === 304) return;
+                        if (!res.ok) return;
+                        var data = await res.json();
+                        if (data && Array.isArray(data.c) && data.c.length > 0) {
+                            applyDeltaStatuses(data.c);
+                        }
+                        if (data && typeof data.v === 'number' && data.v > 0) {
+                            lastServerVersion = data.v;
+                        }
+                    } catch (e) { /* ignore poll errors */ }
+                }
+
+                function pollIntervalMs() {
+                    return document.hidden ? POLL_HIDDEN_MS : POLL_ACTIVE_MS;
+                }
+
+                function scheduleNextPoll(delayMs) {
+                    if (statusPollTimer) window.clearTimeout(statusPollTimer);
+                    statusPollTimer = window.setTimeout(async function () {
+                        await fetchSlotStatusDelta();
+                        scheduleNextPoll(pollIntervalMs());
+                    }, delayMs);
                 }
 
                 async function loadScheduleForDate(dateYmd, opts) {
@@ -448,9 +519,11 @@
                             return;
                         }
                         if (dateInput) dateInput.value = data.dateYmd || dateYmd;
+                        if (typeof data.providerId === 'number' && data.providerId > 0) currentProviderId = data.providerId;
                         var dateUkEl = document.getElementById('bookingDateUk');
                         if (dateUkEl && data.titleDateUk) dateUkEl.textContent = data.titleDateUk;
                         renderDaySchedule(data);
+                        lastServerVersion = typeof data.latestVersion === 'number' ? data.latestVersion : 0;
                         if (pushHistory) {
                             var targetUrl = bookingPageUrl(data.dateYmd || dateYmd);
                             if (window.location.href !== targetUrl) {
@@ -620,8 +693,10 @@
                             var id = parseInt(card.getAttribute('data-slot-id'), 10);
                             var nameIn = card.querySelector('.slot-name');
                             var phoneIn = card.querySelector('.slot-phone');
+                            var clientCommentIn = card.querySelector('.slot-client-comment');
                             var nm = nameIn && nameIn.value.trim();
                             var ph = phoneIn && phoneIn.value.trim();
+                            var clientComment = clientCommentIn && clientCommentIn.value ? clientCommentIn.value.trim() : '';
                             if (!nm || !ph) {
                                 alert("Вкажіть ім'я та телефон.");
                                 return;
@@ -632,6 +707,7 @@
                             body.set('slug', slug);
                             body.set('name', nm);
                             body.set('phone', ph);
+                            body.set('clientComment', clientComment);
                             body.set('__RequestVerificationToken', getToken());
                             try {
                                 var bookUrl = new URL('/Booking', window.location.origin);
@@ -664,11 +740,15 @@
                     }
                 });
 
-                if (statusPollTimer) window.clearInterval(statusPollTimer);
-                statusPollTimer = window.setInterval(fetchSlotStatuses, 30000);
-                fetchSlotStatuses();
+                if (statusPollTimer) window.clearTimeout(statusPollTimer);
+                fetchSlotStatuses().then(function () {
+                    scheduleNextPoll(pollIntervalMs());
+                });
+                document.addEventListener('visibilitychange', function () {
+                    scheduleNextPoll(pollIntervalMs());
+                });
                 window.addEventListener('beforeunload', function () {
-                    if (statusPollTimer) window.clearInterval(statusPollTimer);
+                    if (statusPollTimer) window.clearTimeout(statusPollTimer);
                 });
             })();
         </script>

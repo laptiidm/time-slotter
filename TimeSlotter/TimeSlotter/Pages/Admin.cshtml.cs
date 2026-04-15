@@ -189,7 +189,9 @@ public class AdminModel : PageModel
         await using var tx = await _context.Database.BeginTransactionAsync();
         var updatedRows = await _context.Slots
             .Where(s => s.Id == AssignSlotId && s.ProviderId == user.Id && s.Status == SlotStatus.Available)
-            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.BookedByClient));
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.Status, SlotStatus.BookedByClient)
+                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
         if (updatedRows == 0)
         {
             await tx.RollbackAsync();
@@ -250,7 +252,9 @@ public class AdminModel : PageModel
 
         var updatedRows = await _context.Slots
             .Where(s => s.Id == slotId && s.ProviderId == user.Id && s.Status == SlotStatus.Available)
-            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.BookedByClient));
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.Status, SlotStatus.BookedByClient)
+                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
         if (updatedRows == 0)
         {
             await tx.RollbackAsync();
@@ -359,6 +363,7 @@ public class AdminModel : PageModel
             return new JsonResult(new { success = false, error = "Неможливо перемкнути статус цього слота." }, JsonWriteOptions) { StatusCode = 400 };
         }
 
+        slot.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         var code = (int)slot.Status;
         return new JsonResult(new { success = true, newStatus = code }, JsonWriteOptions);
@@ -385,6 +390,7 @@ public class AdminModel : PageModel
         }
 
         slot.RequiresApproval = requiresApproval;
+        slot.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         var day = DateOnly.FromDateTime(slot.StartTime);
@@ -442,6 +448,7 @@ public class AdminModel : PageModel
         }
 
         slot.Status = SlotStatus.BookedByClient;
+        slot.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         var day = DateOnly.FromDateTime(slot.StartTime);
@@ -475,6 +482,7 @@ public class AdminModel : PageModel
 
         _context.Bookings.RemoveRange(slot.Bookings);
         slot.Status = SlotStatus.Available;
+        slot.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         var day = DateOnly.FromDateTime(slot.StartTime);
@@ -884,7 +892,9 @@ public class AdminModel : PageModel
             b?.CustomerPhone,
             s.IsGrouped,
             s.RequiresApproval,
-            s.AdminComment);
+            s.AdminComment,
+            s.ClientComment,
+            s.UpdatedAt.ToUniversalTime().Ticks);
     }
 
     private static bool TryParseHm(string value, out int totalMinutes)
@@ -919,7 +929,9 @@ public class AdminModel : PageModel
         string? ClientPhone,
         bool IsGrouped,
         bool RequiresApproval,
-        string? AdminComment);
+        string? AdminComment,
+        string? ClientComment,
+        long UpdatedAtVersion);
 
     private sealed class SlotDraftJson
     {

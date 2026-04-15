@@ -59,7 +59,7 @@ public class UserModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostBookAsync(string slug, int slotId, string customerName, string customerPhone, DateTime? date, string? resource)
+    public async Task<IActionResult> OnPostBookAsync(string slug, int slotId, string customerName, string customerPhone, string? clientComment, DateTime? date, string? resource)
     {
         if (string.IsNullOrWhiteSpace(slug))
         {
@@ -77,6 +77,11 @@ public class UserModel : PageModel
 
         customerName = (customerName ?? string.Empty).Trim();
         customerPhone = (customerPhone ?? string.Empty).Trim();
+        clientComment = string.IsNullOrWhiteSpace(clientComment) ? null : clientComment.Trim();
+        if (clientComment != null && clientComment.Length > 200)
+        {
+            clientComment = clientComment[..200];
+        }
         if (string.IsNullOrEmpty(customerName) || string.IsNullOrEmpty(customerPhone))
         {
             return RedirectToPage(new { slug, date = (date ?? DateTime.Today).ToString("yyyy-MM-dd"), resource });
@@ -94,7 +99,9 @@ public class UserModel : PageModel
         var slotDay = slot.StartTime.Date.ToString("yyyy-MM-dd");
         var updatedRows = await _context.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE Slots
-SET Status = CASE WHEN RequiresApproval = 1 THEN {(int)SlotStatus.Pending} ELSE {(int)SlotStatus.BookedByClient} END
+SET Status = CASE WHEN RequiresApproval = 1 THEN {(int)SlotStatus.Pending} ELSE {(int)SlotStatus.BookedByClient} END,
+    ClientComment = {clientComment},
+    UpdatedAt = {DateTime.UtcNow}
 WHERE Id = {slotId} AND ProviderId = {provider.Id} AND Status = {(int)SlotStatus.Available}");
         if (updatedRows == 0)
         {

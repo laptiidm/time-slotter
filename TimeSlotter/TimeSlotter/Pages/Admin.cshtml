@@ -14,8 +14,18 @@
 *@
 <form id="adminCsrfForm" class="sr-only" aria-hidden="true">@Html.AntiForgeryToken()</form>
 <script type="application/json" id="initialExistingSlots">@Html.Raw(Model.InitialSlotsJson)</script>
+<style>
+    @@keyframes admin-slot-delta-flash {
+        0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        40% { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.55); }
+        100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+    }
+    .admin-slot-delta-flash {
+        animation: admin-slot-delta-flash 1.35s ease-out 1;
+    }
+</style>
 
-<div id="adminPageRoot" class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6" data-default-split-minutes="@Model.DefaultSlotIntervalMinutes" data-public-link-save-flash="@(publicLinkSaveFlash ? "1" : "0")" data-public-booking-base="@Model.PublicBookingBaseUrl">
+<div id="adminPageRoot" class="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-slate-100 sm:px-6" data-provider-id="@Model.Provider.Id" data-default-split-minutes="@Model.DefaultSlotIntervalMinutes" data-public-link-save-flash="@(publicLinkSaveFlash ? "1" : "0")" data-public-booking-base="@Model.PublicBookingBaseUrl">
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[35%_65%] lg:gap-6">
         <aside class="flex min-h-0 flex-col lg:h-full">
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/20 ring-1 ring-white/5">
@@ -258,12 +268,16 @@
             const splitIntervalModalCancel = document.getElementById('splitIntervalModalCancel');
             const splitIntervalModalConfirm = document.getElementById('splitIntervalModalConfirm');
 
-            let pollTimer = null;
+            let adminStatusPollTimer = null;
+            var lastServerVersion = 0;
+            var ADMIN_POLL_ACTIVE_MS = 3000;
+            var ADMIN_POLL_HIDDEN_MS = 30000;
             var pendingSplitSlotId = null;
             var splitModalKeydownHandler = null;
             var groupingMode = false;
             var selectedSlotIdsForMerge = [];
             var activeCommentEditor = null;
+            var activeClientCommentViewer = null;
 
             function setCommentEditorOpenState(state, isOpen, discardChanges) {
                 if (!state || !state.slotEl || !state.commentPanel || !state.commentBtn) return;
@@ -290,6 +304,27 @@
                 activeCommentEditor = null;
             }
 
+            function setClientCommentViewerOpenState(state, isOpen) {
+                if (!state || !state.slotEl || !state.panel || !state.btn) return;
+                if (isOpen) {
+                    state.panel.classList.remove('max-h-0', 'opacity-0', 'pointer-events-none', 'mt-0');
+                    state.panel.classList.add('max-h-36', 'opacity-100', 'mt-2');
+                    state.btn.setAttribute('aria-expanded', 'true');
+                    state.slotEl.classList.add('admin-slot-client-comment-open', 'ring-2', 'ring-cyan-500/45', 'ring-offset-1', 'ring-offset-slate-950');
+                } else {
+                    state.panel.classList.remove('max-h-36', 'opacity-100', 'mt-2');
+                    state.panel.classList.add('max-h-0', 'opacity-0', 'pointer-events-none', 'mt-0');
+                    state.btn.setAttribute('aria-expanded', 'false');
+                    state.slotEl.classList.remove('admin-slot-client-comment-open', 'ring-2', 'ring-cyan-500/45', 'ring-offset-1', 'ring-offset-slate-950');
+                }
+            }
+
+            function closeActiveClientCommentViewer() {
+                if (!activeClientCommentViewer) return;
+                setClientCommentViewerOpenState(activeClientCommentViewer, false);
+                activeClientCommentViewer = null;
+            }
+
             function normalizeRow(row) {
                 if (typeof row.statusCode !== 'number') {
                     var st = row.status || '';
@@ -298,7 +333,108 @@
                 if (typeof row.isGrouped !== 'boolean') row.isGrouped = false;
                 if (typeof row.requiresApproval !== 'boolean') row.requiresApproval = false;
                 if (row.adminComment == null || typeof row.adminComment !== 'string') row.adminComment = row.adminComment != null ? String(row.adminComment) : '';
+                if (row.clientComment == null || typeof row.clientComment !== 'string') row.clientComment = row.clientComment != null ? String(row.clientComment) : '';
+                if (typeof row.updatedAtVersion !== 'number' || !Number.isFinite(row.updatedAtVersion)) row.updatedAtVersion = 0;
                 return row;
+            }
+
+            function recomputeLastServerVersionFromSlots() {
+                var max = 0;
+                (window.existingSlots || []).forEach(function (r) {
+                    var v = r.updatedAtVersion;
+                    if (typeof v === 'number' && Number.isFinite(v) && v > max) max = v;
+                });
+                lastServerVersion = max;
+            }
+
+            function adminPollIntervalMs() {
+                return document.hidden ? ADMIN_POLL_HIDDEN_MS : ADMIN_POLL_ACTIVE_MS;
+            }
+
+            function applyAdminSlotDelta(changes) {
+                var toFlash = [];
+                var any = false;
+                if (!changes || !changes.length) return { ids: toFlash, any: false };
+                changes.forEach(function (ch) {
+                    var sid = ch.id;
+                    var id = typeof sid === 'string' ? parseInt(sid, 10) : sid;
+                    if (!Number.isFinite(id)) return;
+                    var row = (window.existingSlots || []).find(function (r) { return r.id === id; });
+                    if (!row) return;
+                    any = true;
+                    var prev = row.statusCode;
+                    var prevReq = row.requiresApproval === true;
+                    normalizeRow(row);
+                    syncRowStatusFromCode(row, ch.s);
+                    if (row.statusCode === 0) row.requiresApproval = ch.a === true;
+                    else row.requiresApproval = false;
+                    if (ch.cn != null) row.clientName = ch.cn;
+                    if (ch.cp != null) row.clientPhone = ch.cp;
+                    if (prev !== row.statusCode || (row.statusCode === 0 && row.requiresApproval !== prevReq)) {
+                        toFlash.push(id);
+                    }
+                });
+                return { ids: toFlash, any: any };
+            }
+
+            function flashAdminSlotCards(ids) {
+                if (!ids || !ids.length) return;
+                ids.forEach(function (id) {
+                    var el = document.querySelector('[data-saved-slot-id="' + id + '"]');
+                    if (!el) return;
+                    el.classList.add('admin-slot-delta-flash');
+                    window.setTimeout(function () {
+                        el.classList.remove('admin-slot-delta-flash');
+                    }, 1500);
+                });
+            }
+
+            async function fetchAdminSlotStatusDelta() {
+                var providerId = adminPageRoot ? parseInt(adminPageRoot.getAttribute('data-provider-id') || '0', 10) : 0;
+                var d = targetDate && targetDate.value;
+                if (!providerId || !d) return;
+                var u = new URL(window.location.origin + '/Booking');
+                u.searchParams.set('handler', 'DeltaUpdate');
+                u.searchParams.set('providerId', String(providerId));
+                u.searchParams.set('date', d);
+                u.searchParams.set('lastClientVersion', String(lastServerVersion || 0));
+                try {
+                    var res = await fetch(u.toString(), {
+                        method: 'GET',
+                        credentials: 'same-origin',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    var data = {};
+                    if (res.status !== 304) {
+                        try { data = await res.json(); } catch (x0) { /* ignore */ }
+                    } else {
+                        try { data = await res.json(); } catch (x1) { /* ignore */ }
+                    }
+                    if (data && typeof data.v === 'number' && data.v > 0) {
+                        lastServerVersion = data.v;
+                    }
+                    if (res.status === 304) return;
+                    if (!res.ok) return;
+                    if (data && Array.isArray(data.c) && data.c.length > 0) {
+                        var deltaOut = applyAdminSlotDelta(data.c);
+                        if (deltaOut.any) {
+                            renderSlots();
+                            if (deltaOut.ids.length) {
+                                window.requestAnimationFrame(function () {
+                                    flashAdminSlotCards(deltaOut.ids);
+                                });
+                            }
+                        }
+                    }
+                } catch (e2) { /* ignore */ }
+            }
+
+            function scheduleAdminStatusPoll(delayMs) {
+                if (adminStatusPollTimer) window.clearTimeout(adminStatusPollTimer);
+                adminStatusPollTimer = window.setTimeout(async function () {
+                    await fetchAdminSlotStatusDelta();
+                    scheduleAdminStatusPoll(adminPollIntervalMs());
+                }, delayMs);
             }
 
             function getDefaultSplitMinutes() {
@@ -354,6 +490,7 @@
                     var o = JSON.parse(initialEl.textContent);
                     var arr = o.slots || [];
                     window.existingSlots = arr.map(normalizeRow);
+                    recomputeLastServerVersionFromSlots();
                 } catch (e) { /* ignore */ }
             })();
 
@@ -1035,6 +1172,7 @@
                 actions.className = 'mt-2 flex flex-wrap items-center gap-2 border-t border-slate-700/30 pt-2';
                 var showActionStrip = !(groupingMode && code === 0);
                 var commentPanel = null;
+                var clientCommentPanel = null;
 
                 if (showActionStrip && row.id > 0) {
                     var commentBtn = document.createElement('button');
@@ -1107,12 +1245,55 @@
                             closeActiveCommentEditor(true);
                             return;
                         }
+                        closeActiveClientCommentViewer();
                         closeActiveCommentEditor(true);
                         ta.value = row.adminComment || '';
                         syncCommentLen();
                         activeCommentEditor = state;
                         setCommentEditorOpenState(state, true, false);
                     });
+
+                    var hasClientComment = (code === 1 || code === 2) && row.clientComment && String(row.clientComment).trim();
+                    if (hasClientComment) {
+                        var clientCommentBtn = document.createElement('button');
+                        clientCommentBtn.type = 'button';
+                        clientCommentBtn.className = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-cyan-500/45 bg-cyan-900/30 text-cyan-100 transition hover:bg-cyan-800/35 focus:outline-none focus:ring-2 focus:ring-cyan-500/40';
+                        clientCommentBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5V9H2v11h5m10 0v-5H7v5m10 0H7"/></svg>';
+                        clientCommentBtn.title = 'Коментар клієнта';
+                        clientCommentBtn.setAttribute('aria-label', 'Коментар клієнта');
+                        clientCommentBtn.setAttribute('aria-expanded', 'false');
+                        actions.appendChild(clientCommentBtn);
+
+                        clientCommentPanel = document.createElement('div');
+                        clientCommentPanel.className = 'admin-slot-client-comment-panel mt-0 w-full max-h-0 overflow-hidden rounded-md border border-cyan-700/45 bg-cyan-950/40 p-2 opacity-0 ring-1 ring-inset ring-cyan-700/35 pointer-events-none transition-all duration-200 ease-out';
+                        var clientCommentLabel = document.createElement('p');
+                        clientCommentLabel.className = 'mb-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-200/90';
+                        clientCommentLabel.textContent = 'Коментар клієнта';
+                        var clientCommentText = document.createElement('p');
+                        clientCommentText.className = 'whitespace-pre-wrap break-words text-xs leading-snug text-cyan-50/95';
+                        clientCommentText.textContent = row.clientComment;
+                        clientCommentPanel.appendChild(clientCommentLabel);
+                        clientCommentPanel.appendChild(clientCommentText);
+
+                        clientCommentBtn.addEventListener('click', function (ev) {
+                            ev.stopPropagation();
+                            var state = {
+                                slotEl: wrap,
+                                panel: clientCommentPanel,
+                                btn: clientCommentBtn
+                            };
+                            var isSame = activeClientCommentViewer && activeClientCommentViewer.slotEl === wrap;
+                            var isOpen = isSame && !clientCommentPanel.classList.contains('max-h-0');
+                            if (isOpen) {
+                                closeActiveClientCommentViewer();
+                                return;
+                            }
+                            closeActiveCommentEditor(true);
+                            closeActiveClientCommentViewer();
+                            activeClientCommentViewer = state;
+                            setClientCommentViewerOpenState(state, true);
+                        });
+                    }
                 }
 
                 if (showActionStrip) {
@@ -1199,6 +1380,9 @@
                 }
                 if (commentPanel) {
                     wrap.appendChild(commentPanel);
+                }
+                if (clientCommentPanel) {
+                    wrap.appendChild(clientCommentPanel);
                 }
 
                 if (code === 0 && !groupingMode) {
@@ -1733,6 +1917,7 @@
                     var data = await res.json();
                     var arr = (data.slots || []).map(normalizeRow);
                     window.existingSlots = arr;
+                    recomputeLastServerVersionFromSlots();
                     var idSet = {};
                     arr.forEach(function (r) { idSet[r.id] = true; });
                     selectedSlotIdsForMerge = selectedSlotIdsForMerge.filter(function (id) { return idSet[id]; });
@@ -1746,6 +1931,8 @@
 
             function renderSlots() {
                 if (!unifiedTimeline || !timelineEmpty || !timelineBadge) return;
+                activeCommentEditor = null;
+                activeClientCommentViewer = null;
 
                 validateAllSlots();
                 markDraftExistingCollisions();
@@ -1902,10 +2089,14 @@
             targetDate?.addEventListener('change', function () {
                 exitGroupingMode();
                 updatePermanentBookingLink();
-                fetchExistingSnapshots();
+                fetchExistingSnapshots().then(function () {
+                    scheduleAdminStatusPoll(adminPollIntervalMs());
+                });
             });
             refreshBtn?.addEventListener('click', function () {
-                fetchExistingSnapshots();
+                fetchExistingSnapshots().then(function () {
+                    scheduleAdminStatusPoll(adminPollIntervalMs());
+                });
             });
 
             adminGroupingToggleBtn?.addEventListener('click', function () {
@@ -1943,14 +2134,29 @@
                 }
             });
             document.addEventListener('mousedown', function (ev) {
-                if (!activeCommentEditor || !activeCommentEditor.slotEl) return;
-                if (activeCommentEditor.slotEl.contains(ev.target)) return;
-                closeActiveCommentEditor(true);
+                var target = ev.target;
+                if (activeCommentEditor && activeCommentEditor.slotEl) {
+                    if (!activeCommentEditor.slotEl.contains(target)) {
+                        closeActiveCommentEditor(true);
+                    }
+                }
+                if (activeClientCommentViewer && activeClientCommentViewer.slotEl) {
+                    if (!activeClientCommentViewer.slotEl.contains(target)) {
+                        closeActiveClientCommentViewer();
+                    }
+                }
             });
 
-            if (pollTimer) clearInterval(pollTimer);
-            pollTimer = setInterval(fetchExistingSnapshots, 30000);
-            fetchExistingSnapshots();
+            if (adminStatusPollTimer) window.clearTimeout(adminStatusPollTimer);
+            fetchExistingSnapshots().then(function () {
+                scheduleAdminStatusPoll(adminPollIntervalMs());
+            });
+            document.addEventListener('visibilitychange', function () {
+                scheduleAdminStatusPoll(adminPollIntervalMs());
+            });
+            window.addEventListener('beforeunload', function () {
+                if (adminStatusPollTimer) window.clearTimeout(adminStatusPollTimer);
+            });
 
             renderSlots();
             if (adminPageRoot && adminPageRoot.getAttribute('data-public-link-save-flash') === '1') {

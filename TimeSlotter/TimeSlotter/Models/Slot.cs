@@ -20,6 +20,13 @@ public class Slot
     [StringLength(300)]
     public string? AdminComment { get; set; }
 
+    /// <summary>Optional customer-provided note captured during booking (visible to provider/admin).</summary>
+    [StringLength(200)]
+    public string? ClientComment { get; set; }
+
+    /// <summary>UTC timestamp of the latest slot mutation used for lightweight delta polling.</summary>
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
     public SlotStatus Status { get; set; }
 
     /// <summary>True when this block was produced by merging adjacent slots (eligible for split back to standard intervals).</summary>

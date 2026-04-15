@@ -68,12 +68,11 @@
                                             <input type="hidden" name="resource" value="@Model.SelectedResource"/>
                                         }
                                         <input type="hidden" name="slotId" value="@slot.Id"/>
-                                        <div class="min-w-[7rem] font-mono text-sm text-slate-300">
-                                            @slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")
-                                            @if (!string.IsNullOrEmpty(slot.ResourceContext))
-                                            {
-                                                <span class="block text-xs font-sans text-slate-500">@slot.ResourceContext</span>
-                                            }
+                                        <div class="min-w-[14rem]">
+                                            <div class="flex items-center justify-between gap-3 font-mono text-sm text-slate-300">
+                                                <span class="shrink-0">@slot.StartTime.ToString("HH:mm") – @slot.EndTime.ToString("HH:mm")</span>
+                                                <span class="min-w-[5.5rem] truncate text-right font-sans text-xs text-slate-500">@(!string.IsNullOrWhiteSpace(slot.ResourceContext) ? slot.ResourceContext : "\u00A0")</span>
+                                            </div>
                                         </div>
                                         <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:gap-2">
                                             <input name="customerName" type="text" required maxlength="120" placeholder="Ім'я"
@@ -81,6 +80,8 @@
                                             <input name="customerPhone" type="tel" required maxlength="40" placeholder="Телефон"
                                                    class="min-w-0 flex-1 rounded-md border-0 bg-slate-800 py-1.5 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500"/>
                                         </div>
+                                        <textarea name="clientComment" maxlength="200" rows="2" placeholder="Коментар до бронювання (необов'язково)"
+                                                  class="w-full rounded-md border-0 bg-slate-800 py-1.5 px-3 text-sm text-white ring-1 ring-inset ring-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 sm:basis-full"></textarea>
                                         <button type="submit"
                                                 class="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500">
                                             Забронювати

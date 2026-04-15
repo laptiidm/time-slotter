@@ -33,7 +33,9 @@ public static class AdminSlotRoleHandlers
         await using var tx = await context.Database.BeginTransactionAsync();
         var updated = await context.Slots
             .Where(s => s.Id == slotId && s.Status == SlotStatus.Available)
-            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.ReservedByAdmin));
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.Status, SlotStatus.ReservedByAdmin)
+                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
         if (updated == 0)
         {
             await tx.RollbackAsync();
@@ -60,7 +62,9 @@ public static class AdminSlotRoleHandlers
         await using var tx = await context.Database.BeginTransactionAsync();
         var updated = await context.Slots
             .Where(s => s.Id == slotId && s.Status == SlotStatus.ReservedByAdmin)
-            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, SlotStatus.Available));
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.Status, SlotStatus.Available)
+                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
         if (updated == 0)
         {
             await tx.RollbackAsync();
