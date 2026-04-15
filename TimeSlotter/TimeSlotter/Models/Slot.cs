@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TimeSlotter.Models;
@@ -14,6 +15,11 @@ public class Slot
     public DateTime EndTime { get; set; }
     public int ProviderId { get; set; }
     public string? ResourceContext { get; set; }
+
+    /// <summary>Private admin-only note; never exposed on the public booking UI.</summary>
+    [StringLength(300)]
+    public string? AdminComment { get; set; }
+
     public SlotStatus Status { get; set; }
 
     /// <summary>True when this block was produced by merging adjacent slots (eligible for split back to standard intervals).</summary>

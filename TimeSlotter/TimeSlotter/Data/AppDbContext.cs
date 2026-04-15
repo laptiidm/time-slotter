@@ -24,6 +24,10 @@ public class AppDbContext : IdentityDbContext<Provider, IdentityRole<int>, int>
             slot.Property(s => s.ResourceContext)
                 .IsRequired(false);
 
+            slot.Property(s => s.AdminComment)
+                .HasMaxLength(300)
+                .IsRequired(false);
+
             slot.Property(s => s.Status)
                 .HasConversion<int>();
 

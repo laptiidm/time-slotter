@@ -53,6 +53,9 @@ public class AdminModel : PageModel
     /// <summary>Slug or user name for <c>?slug=</c> on the public booking page.</summary>
     public string BookingLinkSlug { get; set; } = "";
 
+    /// <summary>Absolute origin for public booking links (follows current request, e.g. Dev Tunnel host).</summary>
+    public string PublicBookingBaseUrl { get; set; } = "";
+
     public IReadOnlyList<CustomerPickVm> CustomersForAssign { get; set; } = Array.Empty<CustomerPickVm>();
 
     public IReadOnlyList<AvailableSlotAssignVm> AvailableSlotsForAssign { get; set; } = Array.Empty<AvailableSlotAssignVm>();
@@ -281,6 +284,8 @@ public class AdminModel : PageModel
     private async Task PrepareSchedulePageAsync(Provider user, DateOnly day)
     {
         Provider = user;
+        var host = ResolvePublicBookingHost(Request);
+        PublicBookingBaseUrl = $"{Request.Scheme}://{host}".TrimEnd('/');
         DefaultSlotIntervalMinutes = Math.Clamp(user.DefaultSlotIntervalMinutes <= 0 ? 30 : user.DefaultSlotIntervalMinutes, 5, 480);
         BookingLinkSlug = ResolveBookingLinkSlug(user);
         ScheduleInitialDate = day.ToString("yyyy-MM-dd");
@@ -385,6 +390,33 @@ public class AdminModel : PageModel
         var day = DateOnly.FromDateTime(slot.StartTime);
         var snap = ToSnapshotDto(slot, day.ToString("yyyy-MM-dd"));
         return new JsonResult(new { success = true, slot = snap }, JsonWriteOptions);
+    }
+
+    /// <summary>AJAX: save internal admin comment (max 300 chars); not used on public booking.</summary>
+    public async Task<JsonResult> OnPostUpdateSlotAdminCommentAsync(int id, [FromForm] string? adminComment)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return new JsonResult(new { success = false, error = "Немає доступу." }, JsonWriteOptions) { StatusCode = 401 };
+        }
+
+        adminComment = string.IsNullOrWhiteSpace(adminComment) ? null : adminComment.Trim();
+        if (adminComment != null && adminComment.Length > 300)
+        {
+            adminComment = adminComment[..300];
+        }
+
+        var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Id == id && s.ProviderId == user.Id);
+        if (slot == null)
+        {
+            return new JsonResult(new { success = false, error = "Слот не знайдено." }, JsonWriteOptions) { StatusCode = 404 };
+        }
+
+        slot.AdminComment = adminComment;
+        await _context.SaveChangesAsync();
+
+        return new JsonResult(new { success = true, adminComment = slot.AdminComment }, JsonWriteOptions);
     }
 
     /// <summary>AJAX: confirm a <see cref="SlotStatus.Pending"/> public request as booked.</summary>
@@ -791,6 +823,28 @@ public class AdminModel : PageModel
         return RedirectToPage();
     }
 
+    /// <summary>Browser-facing host for absolute URLs: <c>X-Forwarded-Host</c> first (reverse proxy / Dev Tunnels), then <c>Host</c>, then <see cref="HttpRequest.Host"/>.</summary>
+    private static string ResolvePublicBookingHost(HttpRequest request)
+    {
+        var forwarded = request.Headers["X-Forwarded-Host"].ToString();
+        if (!string.IsNullOrWhiteSpace(forwarded))
+        {
+            var first = forwarded.Split(',', 2, StringSplitOptions.TrimEntries)[0];
+            if (!string.IsNullOrEmpty(first))
+            {
+                return first;
+            }
+        }
+
+        var hostHeader = request.Headers["Host"].ToString().Trim();
+        if (!string.IsNullOrEmpty(hostHeader))
+        {
+            return hostHeader;
+        }
+
+        return request.Host.Value;
+    }
+
     private static string ResolveBookingLinkSlug(Provider user) =>
         !string.IsNullOrWhiteSpace(user.Slug)
             ? user.Slug.Trim()
@@ -829,7 +883,8 @@ public class AdminModel : PageModel
             b?.CustomerName,
             b?.CustomerPhone,
             s.IsGrouped,
-            s.RequiresApproval);
+            s.RequiresApproval,
+            s.AdminComment);
     }
 
     private static bool TryParseHm(string value, out int totalMinutes)
@@ -863,7 +918,8 @@ public class AdminModel : PageModel
         string? ClientName,
         string? ClientPhone,
         bool IsGrouped,
-        bool RequiresApproval);
+        bool RequiresApproval,
+        string? AdminComment);
 
     private sealed class SlotDraftJson
     {
